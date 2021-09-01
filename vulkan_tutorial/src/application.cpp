@@ -8,7 +8,8 @@
 
 #include "unused_var.h"
 #include "vulkan_utility.h"
-#include "physical_device_info.h"
+#include "device/physical_device_info.h"
+#include "device/vulkan_device.h"
 
 void destroy_debug_messenger(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) {
     auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
@@ -87,7 +88,7 @@ void populate_debug_messenger_create_info(VkDebugUtilsMessengerCreateInfoEXT& cr
     create_info.pUserData = nullptr;
 }
 
-void Application::pick_physical_device()
+VkPhysicalDevice Application::pick_physical_device() const
 {
     std::vector<VkPhysicalDevice> devices;
     VulkanUtility::get_devices(vk_instance_, devices);
@@ -119,8 +120,39 @@ void Application::pick_physical_device()
         throw std::runtime_error("There is no suitable device");
     }
 
-    vk_device_ = devices[best_device_index];
-    device_info.set_device(vk_device_);
+    return devices[best_device_index];
+}
+
+void Application::create_device()
+{
+    VkPhysicalDevice phys_dev = pick_physical_device();
+    PhysicalDeviceInfo phys_dev_info;
+    phys_dev_info.set_device(phys_dev);
+
+    float queue_priority = 1.0f;
+
+    VkDeviceQueueCreateInfo queue_create_info{};
+    queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queue_create_info.queueFamilyIndex = static_cast<ui32>(phys_dev_info.queue_family_index_cache.graphics);
+    queue_create_info.queueCount = 1;
+    queue_create_info.pQueuePriorities = &queue_priority;
+
+    VkPhysicalDeviceFeatures device_features{};
+
+    VkDeviceCreateInfo device_create_info{};
+    device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    device_create_info.pQueueCreateInfos = &queue_create_info;
+    device_create_info.queueCreateInfoCount = 1;
+    device_create_info.pEnabledFeatures = &device_features;
+    device_create_info.enabledExtensionCount = 0;
+    device_create_info.enabledLayerCount = 0; // need to specify them in instance only
+
+    VkDevice logical_device;
+    vk_expect_success(
+        vkCreateDevice(phys_dev, &device_create_info, nullptr, &logical_device),
+        "vkCreateDevice - create logical device for {}", phys_dev_info.properties.deviceName);
+
+    device_ = logical_device;
 }
 
 void Application::checkValidationLayerSupport()
@@ -157,7 +189,7 @@ void Application::checkValidationLayerSupport()
 void Application::initialize_vulkan()
 {
     create_instance();
-    pick_physical_device();
+    create_device();
 }
 
 void Application::create_instance()
@@ -210,11 +242,7 @@ void Application::main_loop()
 
 void Application::cleanup()
 {
-    if(debug_messenger_)
-    {
-        destroy_debug_messenger(vk_instance_, debug_messenger_, nullptr);
-        debug_messenger_ = nullptr;
-    }
+    device_ = nullptr;
 
     if(vk_instance_)
     {

@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 set(target_name vulkan_tutorial)
-file(GLOB_RECURSE source_list "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+set(target_src_root ${CMAKE_CURRENT_SOURCE_DIR}/src/)
+file(GLOB_RECURSE source_list "${target_src_root}/*.cpp")
 message("sources: ${source_list}")
 add_executable(${target_name} ${source_list})
 target_link_libraries(${target_name} glfw fmt glm Vulkan::Vulkan)
@@ -8,6 +9,7 @@ target_compile_definitions(${target_name} PUBLIC
 	-DGLFW_INCLUDE_VULKAN
 	-DGLM_FORCE_RADIANS
 	-DGLM_FORCE_DEPTH_ZERO_TO_ONE)
+target_include_directories(${target_name} PUBLIC ${target_src_root})
 
 if(MSVC)
   # Force to always compile with W4

@@ -2,9 +2,11 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 
 #include "integer.h"
 #include "vulkan/vulkan.h"
+#include "device/vulkan_device.h"
 
 struct GLFWwindow;
 
@@ -23,7 +25,8 @@ public:
     void run();
 
 private:
-    void pick_physical_device();
+    [[nodiscard]] VkPhysicalDevice pick_physical_device() const;
+    void create_device();
     void checkValidationLayerSupport();
     void initialize_vulkan();
     void create_instance();
@@ -33,13 +36,13 @@ private:
     std::vector<const char*> get_required_extensions();
 
 private:
-    VkDebugUtilsMessengerEXT debug_messenger_;
     std::vector<std::string> validation_layers_;
     GLFWwindow* window_ = nullptr;
     VkInstance vk_instance_;
-    VkPhysicalDevice vk_device_ = VK_NULL_HANDLE;
     ui32 window_width_ = kDefaultWindowWidth;
     ui32 window_height_ = kDefaultWindowHeight;
+
+    VulkanDevice device_;
 
     ui8 glfw_initialized : 1;
 };
