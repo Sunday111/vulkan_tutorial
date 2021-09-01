@@ -7,104 +7,8 @@
 #include <cassert>
 
 #include "unused_var.h"
-
-static void get_devices(VkInstance instance, std::vector<VkPhysicalDevice>& out_devices) noexcept
-{
-    ui32 num_devices = 0;
-    vk_expect_success(
-        vkEnumeratePhysicalDevices(instance, &num_devices, nullptr),
-        "vkEnumeratePhysicalDevices for devices count");
-
-    out_devices.resize(num_devices);
-    if (num_devices > 0)
-    {
-        vk_expect_success(
-            vkEnumeratePhysicalDevices(instance, &num_devices, out_devices.data()),
-            "vkEnumeratePhysicalDevices for devices list");
-    }
-}
-
-static void get_queue_families(VkPhysicalDevice device, std::vector<VkQueueFamilyProperties>& out_queue_families) noexcept
-{
-    ui32 num_queue_families = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &num_queue_families, nullptr);
-
-    out_queue_families.resize(num_queue_families);
-
-    [[likely]]
-    if(num_queue_families > 0)
-    {
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &num_queue_families, out_queue_families.data());
-    }
-}
-
-void DeviceInfo::set_device(VkPhysicalDevice new_device) noexcept
-{
-    [[likely]]
-    if(device != new_device)
-    {
-        if(new_device != VK_NULL_HANDLE)
-        {
-            device = new_device;
-            vkGetPhysicalDeviceProperties(device, &properties);
-            vkGetPhysicalDeviceFeatures(device, &features);
-            get_queue_families(device, families_properties);
-            populate_index_cache();
-        }
-        else
-        {
-            *this = DeviceInfo();
-        }
-    }
-}
-
-void DeviceInfo::populate_index_cache() noexcept
-{
-    int i = 0;
-    for (const auto& queueFamily : families_properties)
-    {
-        if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-        {
-            queue_family_index_cache.graphics = i;
-        }
-
-        if (queue_family_index_cache.is_complete())
-        {
-            break;
-        }
-
-        i++;
-    }
-}
-
-int DeviceInfo::rate_device() const noexcept
-{
-    if(!queue_family_index_cache.has_all_required())
-    {
-        return -1;
-    }
-
-    int score = 0;
-
-    // Discrete GPUs have a significant performance advantage
-    if (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
-    {
-        score += 1000;
-    }
-
-    return score;
-}
-
-[[nodiscard]] static VkResult create_debug_messenger(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) noexcept
-{
-    auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
-    if (func)
-    {
-        return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
-    }
-
-    return VK_ERROR_EXTENSION_NOT_PRESENT;
-}
+#include "vulkan_utility.h"
+#include "physical_device_info.h"
 
 void destroy_debug_messenger(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) {
     auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
@@ -183,24 +87,10 @@ void populate_debug_messenger_create_info(VkDebugUtilsMessengerCreateInfoEXT& cr
     create_info.pUserData = nullptr;
 }
 
-void Application::setup_debug_messenger()
-{
-    #ifdef NDEBUG
-        return
-    #endif
-
-    VkDebugUtilsMessengerCreateInfoEXT create_info;
-    populate_debug_messenger_create_info(create_info);
-
-    vk_expect_success(
-        create_debug_messenger(vk_instance_, &create_info, nullptr, &debug_messenger_),
-        "create_debug_messenger");
-}
-
 void Application::pick_physical_device()
 {
     std::vector<VkPhysicalDevice> devices;
-    get_devices(vk_instance_, devices);
+    VulkanUtility::get_devices(vk_instance_, devices);
 
     [[unlikely]]
     if (devices.empty())
@@ -211,7 +101,7 @@ void Application::pick_physical_device()
     int best_score = -1;
     size_t best_device_index = 0;
 
-    DeviceInfo device_info;
+    PhysicalDeviceInfo device_info;
     for(size_t i = 0; i < devices.size(); ++i)
     {
         device_info.set_device(devices[i]);
@@ -230,6 +120,7 @@ void Application::pick_physical_device()
     }
 
     vk_device_ = devices[best_device_index];
+    device_info.set_device(vk_device_);
 }
 
 void Application::checkValidationLayerSupport()
@@ -266,7 +157,6 @@ void Application::checkValidationLayerSupport()
 void Application::initialize_vulkan()
 {
     create_instance();
-    setup_debug_messenger();
     pick_physical_device();
 }
 
