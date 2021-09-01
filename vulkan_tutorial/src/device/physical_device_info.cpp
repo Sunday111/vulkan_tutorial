@@ -1,8 +1,9 @@
 #include "physical_device_info.h"
 
 #include "vulkan_utility.h"
+#include "error_handling.h"
 
-void PhysicalDeviceInfo::set_device(VkPhysicalDevice new_device) noexcept
+void PhysicalDeviceInfo::set_device(VkPhysicalDevice new_device, VkSurfaceKHR present_surface)
 {
     [[likely]]
     if (device != new_device)
@@ -13,7 +14,7 @@ void PhysicalDeviceInfo::set_device(VkPhysicalDevice new_device) noexcept
             vkGetPhysicalDeviceProperties(device, &properties);
             vkGetPhysicalDeviceFeatures(device, &features);
             VulkanUtility::get_queue_families(device, families_properties);
-            populate_index_cache();
+            populate_index_cache(present_surface);
         }
         else
         {
@@ -22,17 +23,22 @@ void PhysicalDeviceInfo::set_device(VkPhysicalDevice new_device) noexcept
     }
 }
 
-void PhysicalDeviceInfo::populate_index_cache() noexcept
+void PhysicalDeviceInfo::populate_index_cache(VkSurfaceKHR surface)
 {
     int i = 0;
     for (const auto& queueFamily : families_properties)
     {
         if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
         {
-            queue_family_index_cache.graphics = i;
+            graphics_fi_ = i;
         }
 
-        if (queue_family_index_cache.is_complete())
+        if (VulkanUtility::device_supports_present(device, i, surface))
+        {
+            present_fi_ = i;
+        }
+
+        if (is_complete())
         {
             break;
         }
@@ -43,7 +49,7 @@ void PhysicalDeviceInfo::populate_index_cache() noexcept
 
 [[nodiscard]] int PhysicalDeviceInfo::rate_device() const noexcept
 {
-    if (!queue_family_index_cache.has_all_required())
+    if (!has_all_required())
     {
         return -1;
     }

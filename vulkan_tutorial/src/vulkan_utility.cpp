@@ -32,3 +32,12 @@ void VulkanUtility::get_queue_families(VkPhysicalDevice device, std::vector<VkQu
         vkGetPhysicalDeviceQueueFamilyProperties(device, &num_queue_families, out_queue_families.data());
     }
 }
+
+bool VulkanUtility::device_supports_present(VkPhysicalDevice device, ui32 queue_family_index, VkSurfaceKHR surface)
+{
+    VkBool32 present_supported = false;
+    vk_expect_success(
+        vkGetPhysicalDeviceSurfaceSupportKHR(device, queue_family_index, surface, &present_supported),
+        "vkGetPhysicalDeviceSurfaceSupportKHR");
+    return present_supported;
+}

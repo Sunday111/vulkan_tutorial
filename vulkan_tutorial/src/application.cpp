@@ -5,6 +5,7 @@
 #include <string_view>
 #include <stdexcept>
 #include <cassert>
+#include <ranges>
 
 #include "unused_var.h"
 #include "vulkan_utility.h"
@@ -105,7 +106,7 @@ VkPhysicalDevice Application::pick_physical_device() const
     PhysicalDeviceInfo device_info;
     for(size_t i = 0; i < devices.size(); ++i)
     {
-        device_info.set_device(devices[i]);
+        device_info.set_device(devices[i], surface_);
         const int score = device_info.rate_device();
         if (score > best_score)
         {
@@ -123,26 +124,46 @@ VkPhysicalDevice Application::pick_physical_device() const
     return devices[best_device_index];
 }
 
+void Application::create_surface()
+{
+    vk_expect_success(
+        glfwCreateWindowSurface(vk_instance_, window_, nullptr, &surface_),
+        "glfwCreateWindowSurface");
+}
+
 void Application::create_device()
 {
     VkPhysicalDevice phys_dev = pick_physical_device();
     PhysicalDeviceInfo phys_dev_info;
-    phys_dev_info.set_device(phys_dev);
+    phys_dev_info.set_device(phys_dev, surface_);
 
     float queue_priority = 1.0f;
 
-    VkDeviceQueueCreateInfo queue_create_info{};
-    queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queue_create_info.queueFamilyIndex = static_cast<ui32>(phys_dev_info.queue_family_index_cache.graphics);
-    queue_create_info.queueCount = 1;
-    queue_create_info.pQueuePriorities = &queue_priority;
+    std::vector<VkDeviceQueueCreateInfo> queue_create_infos;
+
+    auto add_queue_family = [&](ui32 idx)
+    {
+        if (std::find_if(queue_create_infos.begin(), queue_create_infos.end(),
+            [idx](auto& info){ return info.queueFamilyIndex == idx; }) == queue_create_infos.end())
+        {
+            VkDeviceQueueCreateInfo queue_create_info{};
+            queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            queue_create_info.queueFamilyIndex = idx;
+            queue_create_info.queueCount = 1;
+            queue_create_info.pQueuePriorities = &queue_priority;
+            queue_create_infos.push_back(queue_create_info);
+        }
+    };
+
+    add_queue_family(phys_dev_info.get_graphics_queue_family_index());
+    add_queue_family(phys_dev_info.get_present_queue_family_index());
 
     VkPhysicalDeviceFeatures device_features{};
 
     VkDeviceCreateInfo device_create_info{};
     device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    device_create_info.pQueueCreateInfos = &queue_create_info;
-    device_create_info.queueCreateInfoCount = 1;
+    device_create_info.pQueueCreateInfos = queue_create_infos.data();
+    device_create_info.queueCreateInfoCount = static_cast<ui32>(queue_create_infos.size());
     device_create_info.pEnabledFeatures = &device_features;
     device_create_info.enabledExtensionCount = 0;
     device_create_info.enabledLayerCount = 0; // need to specify them in instance only
@@ -153,6 +174,9 @@ void Application::create_device()
         "vkCreateDevice - create logical device for {}", phys_dev_info.properties.deviceName);
 
     device_ = logical_device;
+    VkQueue graphics_queue = device_.get_queue(phys_dev_info.get_graphics_queue_family_index(), 0);
+    VkQueue present_queue = device_.get_queue(phys_dev_info.get_present_queue_family_index(), 0);
+    unused_var(graphics_queue, present_queue);
 }
 
 void Application::checkValidationLayerSupport()
@@ -189,6 +213,7 @@ void Application::checkValidationLayerSupport()
 void Application::initialize_vulkan()
 {
     create_instance();
+    create_surface();
     create_device();
 }
 
@@ -243,6 +268,12 @@ void Application::main_loop()
 void Application::cleanup()
 {
     device_ = nullptr;
+
+    if (surface_)
+    {
+        vkDestroySurfaceKHR(vk_instance_, surface_, nullptr);
+        surface_ = nullptr;
+    }
 
     if(vk_instance_)
     {

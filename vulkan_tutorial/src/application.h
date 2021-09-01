@@ -26,6 +26,7 @@ public:
 
 private:
     [[nodiscard]] VkPhysicalDevice pick_physical_device() const;
+    void create_surface();
     void create_device();
     void checkValidationLayerSupport();
     void initialize_vulkan();
@@ -36,13 +37,13 @@ private:
     std::vector<const char*> get_required_extensions();
 
 private:
+    VkSurfaceKHR surface_ = nullptr;
+    VulkanDevice device_;
     std::vector<std::string> validation_layers_;
     GLFWwindow* window_ = nullptr;
     VkInstance vk_instance_;
     ui32 window_width_ = kDefaultWindowWidth;
     ui32 window_height_ = kDefaultWindowHeight;
-
-    VulkanDevice device_;
 
     ui8 glfw_initialized : 1;
 };
