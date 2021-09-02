@@ -3,7 +3,7 @@
 #include "vulkan_utility.h"
 #include "error_handling.h"
 
-void PhysicalDeviceInfo::set_device(VkPhysicalDevice new_device, VkSurfaceKHR present_surface)
+void PhysicalDeviceInfo::set_device(VkPhysicalDevice new_device, VkSurfaceKHR surface)
 {
     [[likely]]
     if (device != new_device)
@@ -14,13 +14,35 @@ void PhysicalDeviceInfo::set_device(VkPhysicalDevice new_device, VkSurfaceKHR pr
             vkGetPhysicalDeviceProperties(device, &properties);
             vkGetPhysicalDeviceFeatures(device, &features);
             VulkanUtility::get_queue_families(device, families_properties);
-            populate_index_cache(present_surface);
+            VulkanUtility::get_device_extensions(device, extensions);
+
+            vk_expect_success(
+                vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &swapchain.capabilities),
+                "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
+
+            VulkanUtility::get_device_surface_formats(device, surface, swapchain.formats);
+            VulkanUtility::get_device_surface_present_modes(device, surface, swapchain.present_modes);
+
+            populate_index_cache(surface);
         }
         else
         {
             *this = PhysicalDeviceInfo();
         }
     }
+}
+
+bool PhysicalDeviceInfo::has_extension(std::string_view name) const noexcept
+{
+    for (auto& ext : extensions)
+    {
+        if (name == ext.extensionName)
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void PhysicalDeviceInfo::populate_index_cache(VkSurfaceKHR surface)
@@ -63,4 +85,40 @@ void PhysicalDeviceInfo::populate_index_cache(VkSurfaceKHR surface)
     }
 
     return score;
+}
+
+VkSurfaceFormatKHR SwapChainSupportDetails::choose_surface_format(const VkSurfaceFormatKHR& preferred) const noexcept
+{
+    size_t best_index = 0;
+    int best_score = -1;
+
+    for (size_t index = 0; index != formats.size(); ++index)
+    {
+        const auto& surface_format = formats[index];
+
+        int score = 0;
+        if (surface_format.format == preferred.format)
+        {
+            ++score;
+        }
+
+        if (surface_format.colorSpace == preferred.colorSpace)
+        {
+            ++score;
+        }
+
+        if (score > best_score)
+        {
+            best_index = index;
+            best_score = score;
+
+            // full match detected
+            if (best_score == 2)
+            {
+                break;
+            }
+        }
+    }
+
+    return formats[best_index];
 }

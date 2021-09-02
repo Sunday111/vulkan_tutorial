@@ -19,6 +19,8 @@ public:
     void destroy() noexcept;
     void move_from(VulkanDevice& another) noexcept;
 
+    operator VkDevice() const noexcept { return device_; }
+
 private:
     VkDevice device_ = nullptr;
 };
