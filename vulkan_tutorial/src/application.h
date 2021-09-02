@@ -33,6 +33,7 @@ private:
     void create_device();
     void create_swap_chain();
     void create_swap_chain_image_views();
+    void create_render_pass();
     void create_graphics_pipeline();
     VkShaderModule create_shader_module(const std::filesystem::path& file, std::vector<ui8>& cache);
     void checkValidationLayerSupport();
@@ -46,19 +47,41 @@ private:
     VkExtent2D choose_swap_extent() const;
     std::vector<const char*> get_required_extensions();
 
+    template<auto fn, typename Handle>
+    static void vk_destroy(Handle& handle, const VkAllocationCallbacks* allocation_callbacks = nullptr) noexcept
+    {
+        if (handle)
+        {
+            fn(handle, allocation_callbacks);
+            handle = nullptr;
+        }
+    }
+
+    template<auto fn, typename Owner, typename Handle>
+    static void vk_destroy(Owner& owner, Handle& handle, const VkAllocationCallbacks* allocation_callbacks = nullptr) noexcept
+    {
+        if (handle)
+        {
+            fn(owner, handle, allocation_callbacks);
+            handle = nullptr;
+        }
+    }
+
 private:
     std::vector<VkImage> swap_chain_images_;
     std::vector<VkImageView> swap_chain_image_views_;
     std::vector<const char*> validation_layers_;
     std::vector<const char*> device_extensions_;
     std::filesystem::path executable_file_;
+    VkPipeline graphics_pipeline_ = nullptr;
+    VkRenderPass render_pass_ = nullptr;
     VkPipelineLayout pipeline_layout_ = nullptr;
     VkSwapchainKHR swap_chain_ = nullptr;
     VkSurfaceKHR surface_ = nullptr;
     PhysicalDeviceInfo device_info_;
     VulkanDevice device_;
     GLFWwindow* window_ = nullptr;
-    VkInstance vk_instance_ = nullptr;
+    VkInstance instance_ = nullptr;
     ui32 window_width_ = kDefaultWindowWidth;
     ui32 window_height_ = kDefaultWindowHeight;
     VkFormat swap_chain_image_format_;

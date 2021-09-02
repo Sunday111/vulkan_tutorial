@@ -126,7 +126,7 @@ void populate_debug_messenger_create_info(VkDebugUtilsMessengerCreateInfoEXT& cr
 void Application::pick_physical_device()
 {
     std::vector<VkPhysicalDevice> devices;
-    VulkanUtility::get_devices(vk_instance_, devices);
+    VulkanUtility::get_devices(instance_, devices);
 
     [[unlikely]]
     if (devices.empty())
@@ -180,7 +180,7 @@ void Application::pick_physical_device()
 void Application::create_surface()
 {
     vk_expect_success(
-        glfwCreateWindowSurface(vk_instance_, window_, nullptr, &surface_),
+        glfwCreateWindowSurface(instance_, window_, nullptr, &surface_),
         "glfwCreateWindowSurface");
 }
 
@@ -319,6 +319,39 @@ void Application::create_swap_chain_image_views()
     }
 }
 
+void Application::create_render_pass()
+{
+    VkAttachmentDescription color_attachment{};
+    color_attachment.format = swap_chain_image_format_;
+    color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    VkAttachmentReference color_attachment_ref{};
+    color_attachment_ref.attachment = 0;
+    color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &color_attachment_ref;
+
+    VkRenderPassCreateInfo render_pass_create_info{};
+    render_pass_create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    render_pass_create_info.attachmentCount = 1;
+    render_pass_create_info.pAttachments = &color_attachment;
+    render_pass_create_info.subpassCount = 1;
+    render_pass_create_info.pSubpasses = &subpass;
+
+    vk_expect_success(
+        vkCreateRenderPass(device_, &render_pass_create_info, nullptr, &render_pass_),
+        "vkCreateRenderPass");
+}
+
 void Application::create_graphics_pipeline()
 {
     auto shaders_dir = executable_file_.parent_path() / "shaders";
@@ -346,10 +379,10 @@ void Application::create_graphics_pipeline()
     vert_input_info.vertexAttributeDescriptionCount = 0;
     vert_input_info.pVertexAttributeDescriptions = nullptr;
 
-    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    inputAssembly.primitiveRestartEnable = VK_FALSE;
+    VkPipelineInputAssemblyStateCreateInfo input_assembly{};
+    input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    input_assembly.primitiveRestartEnable = VK_FALSE;
 
     VkViewport viewport{};
     viewport.x = 0.0f;
@@ -422,10 +455,33 @@ void Application::create_graphics_pipeline()
 
     vk_expect_success(
         vkCreatePipelineLayout(device_, &pipline_layout_info, nullptr, &pipeline_layout_),
-        "vkCreatePipelineLayout at ", __LINE__);
+        "vkCreatePipelineLayout at {}", __LINE__);
 
-    vkDestroyShaderModule(device_, vert_shader_module, nullptr);
-    vkDestroyShaderModule(device_, fragment_shader_module, nullptr);
+    std::array shader_stages{ vert_shader_stage_create_info, frag_shader_stage_create_info };
+    VkGraphicsPipelineCreateInfo pipeline_info{};
+    pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipeline_info.stageCount = static_cast<ui32>(shader_stages.size());
+    pipeline_info.pStages = shader_stages.data();
+    pipeline_info.pVertexInputState = &vert_input_info;
+    pipeline_info.pInputAssemblyState = &input_assembly;
+    pipeline_info.pViewportState = &viewport_state;
+    pipeline_info.pRasterizationState = &rasterizer;
+    pipeline_info.pMultisampleState = &multisampling;
+    pipeline_info.pDepthStencilState = nullptr; // Optional
+    pipeline_info.pColorBlendState = &color_blending;
+    pipeline_info.pDynamicState = nullptr; // Optional
+    pipeline_info.layout = pipeline_layout_;
+    pipeline_info.renderPass = render_pass_;
+    pipeline_info.subpass = 0;
+    pipeline_info.basePipelineHandle = VK_NULL_HANDLE; // Optional
+    pipeline_info.basePipelineIndex = -1; // Optional
+
+    vk_expect_success(
+        vkCreateGraphicsPipelines(device_, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &graphics_pipeline_),
+        "vkCreateGraphicsPipelines at {}", __LINE__);
+
+    vk_destroy<vkDestroyShaderModule>(device_, vert_shader_module);
+    vk_destroy<vkDestroyShaderModule>(device_, fragment_shader_module);
 }
 
 VkShaderModule Application::create_shader_module(const std::filesystem::path& file, std::vector<ui8>& shader_code)
@@ -484,6 +540,7 @@ void Application::initialize_vulkan()
     create_device();
     create_swap_chain();
     create_swap_chain_image_views();
+    create_render_pass();
     create_graphics_pipeline();
 }
 
@@ -516,7 +573,7 @@ void Application::create_instance()
         create_info.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&create_messenger_info;
     }
 
-    vk_expect_success(vkCreateInstance(&create_info, nullptr, &vk_instance_), "vkCreateInstance");
+    vk_expect_success(vkCreateInstance(&create_info, nullptr, &instance_), "vkCreateInstance");
 }
 
 void Application::main_loop()
@@ -529,11 +586,9 @@ void Application::main_loop()
 
 void Application::cleanup()
 {
-    if (pipeline_layout_)
-    {
-        vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
-        pipeline_layout_ = nullptr;
-    }
+    vk_destroy<vkDestroyPipeline>(device_, graphics_pipeline_);
+    vk_destroy<vkDestroyPipelineLayout>(device_, pipeline_layout_);
+    vk_destroy<vkDestroyRenderPass>(device_, render_pass_);
 
     while (!swap_chain_image_views_.empty())
     {
@@ -541,25 +596,10 @@ void Application::cleanup()
         swap_chain_image_views_.pop_back();
     }
 
-    if (swap_chain_)
-    {
-        vkDestroySwapchainKHR(device_, swap_chain_, nullptr);
-        swap_chain_ = nullptr;
-    }
-
+    vk_destroy<vkDestroySwapchainKHR>(device_, swap_chain_);
     device_ = nullptr;
-
-    if (surface_)
-    {
-        vkDestroySurfaceKHR(vk_instance_, surface_, nullptr);
-        surface_ = nullptr;
-    }
-
-    if(vk_instance_)
-    {
-        vkDestroyInstance(vk_instance_, nullptr);
-        vk_instance_ = nullptr;
-    }
+    vk_destroy<vkDestroySurfaceKHR>(instance_, surface_);
+    vk_destroy<vkDestroyInstance>(instance_);
 
     if (window_)
     {
