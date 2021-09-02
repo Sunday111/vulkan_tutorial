@@ -236,7 +236,7 @@ void Application::create_swap_chain()
     if (queueFamilyIndices[0] != queueFamilyIndices[1])
     {
         createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-        createInfo.queueFamilyIndexCount = queueFamilyIndices.size();
+        createInfo.queueFamilyIndexCount = static_cast<ui32>(queueFamilyIndices.size());
         createInfo.pQueueFamilyIndices = queueFamilyIndices.data();
     }
     else
@@ -258,6 +258,36 @@ void Application::create_swap_chain()
 
     VulkanUtility::get_swap_chain_images(device_, swap_chain_, swap_chain_images_);
     swap_chain_image_format_ = surfaceFormat.format;
+}
+
+void Application::create_swap_chain_image_views()
+{
+    const size_t num_images = swap_chain_images_.size();
+    swap_chain_image_views_.resize(num_images);
+    for (size_t i = 0; i != num_images; i++)
+    {
+        const VkImage image = swap_chain_images_[i];
+        VkImageView& image_view = swap_chain_image_views_[i];
+
+        VkImageViewCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        createInfo.image = image;
+        createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        createInfo.format = swap_chain_image_format_;
+        createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+        createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        createInfo.subresourceRange.baseMipLevel = 0;
+        createInfo.subresourceRange.levelCount = 1;
+        createInfo.subresourceRange.baseArrayLayer = 0;
+        createInfo.subresourceRange.layerCount = 1;
+
+        vk_expect_success(
+            vkCreateImageView(device_, &createInfo, nullptr, &image_view),
+            "vkCreateImageView");
+    }
 }
 
 void Application::checkValidationLayerSupport()
@@ -299,6 +329,7 @@ void Application::initialize_vulkan()
     pick_physical_device();
     create_device();
     create_swap_chain();
+    create_swap_chain_image_views();
 }
 
 void Application::create_instance()
@@ -343,6 +374,12 @@ void Application::main_loop()
 
 void Application::cleanup()
 {
+    while (!swap_chain_image_views_.empty())
+    {
+        vkDestroyImageView(device_, swap_chain_image_views_.back(), nullptr);
+        swap_chain_image_views_.pop_back();
+    }
+
     if (swap_chain_)
     {
         vkDestroySwapchainKHR(device_, swap_chain_, nullptr);

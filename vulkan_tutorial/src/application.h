@@ -30,6 +30,7 @@ private:
     void create_surface();
     void create_device();
     void create_swap_chain();
+    void create_swap_chain_image_views();
     void checkValidationLayerSupport();
     void initialize_vulkan();
     void create_instance();
@@ -43,6 +44,7 @@ private:
 
 private:
     std::vector<VkImage> swap_chain_images_;
+    std::vector<VkImageView> swap_chain_image_views_;
     std::vector<const char*> validation_layers_;
     std::vector<const char*> device_extensions_;
     VkSwapchainKHR swap_chain_ = nullptr;
