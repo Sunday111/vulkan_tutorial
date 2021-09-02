@@ -508,6 +508,72 @@ void Application::create_frame_buffers()
     }
 }
 
+void Application::create_command_pool()
+{
+    VkCommandPoolCreateInfo pool_info{};
+    pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    pool_info.queueFamilyIndex = device_info_.get_graphics_queue_family_index();
+    pool_info.flags = 0; // Optional
+
+    vk_expect_success(
+        vkCreateCommandPool(device_, &pool_info, nullptr, &command_pool_),
+        "vkCreateCommandPool for graphics family at {}", __LINE__);
+}
+
+void Application::create_command_buffers()
+{
+    ui32 num_buffers = static_cast<ui32>(swap_chain_frame_buffers_.size());
+    command_buffers_.resize(num_buffers);
+
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = command_pool_;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = num_buffers;
+    vk_expect_success(
+        vkAllocateCommandBuffers(device_, &allocInfo, command_buffers_.data()),
+        "vkAllocateCommandBuffers {} buffers", num_buffers);
+
+    for (ui32 i = 0; i != num_buffers; ++i)
+    {
+        VkCommandBuffer command_buffer = command_buffers_[i];
+
+        VkCommandBufferBeginInfo beginInfo{};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = 0; // Optional
+        beginInfo.pInheritanceInfo = nullptr; // Optional
+
+        vk_expect_success(
+            vkBeginCommandBuffer(command_buffer, &beginInfo),
+            "vkBeginCommandBuffer {}", i);
+
+        VkRenderPassBeginInfo render_pass_info{};
+        render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        render_pass_info.renderPass = render_pass_;
+        render_pass_info.framebuffer = swap_chain_frame_buffers_[i];
+        render_pass_info.renderArea.offset = { 0, 0 };
+        render_pass_info.renderArea.extent = swap_chain_extent_;
+
+        VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+        render_pass_info.clearValueCount = 1;
+        render_pass_info.pClearValues = &clearColor;
+
+        vkCmdBeginRenderPass(command_buffer, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline_);
+
+        ui32 num_vertices = 3;
+        ui32 num_instances = 1;
+        ui32 first_vertex = 0;
+        ui32 first_instance = 0;
+        vkCmdDraw(command_buffer, num_vertices, num_instances, first_vertex, first_instance);
+        vkCmdEndRenderPass(command_buffer);
+
+        vk_expect_success(
+            vkEndCommandBuffer(command_buffer),
+            "vkEndCommandBuffer {}", i);
+    }
+}
+
 VkShaderModule Application::create_shader_module(const std::filesystem::path& file, std::vector<ui8>& shader_code)
 {
     read_file(file, shader_code);
@@ -567,6 +633,8 @@ void Application::initialize_vulkan()
     create_render_pass();
     create_graphics_pipeline();
     create_frame_buffers();
+    create_command_pool();
+    create_command_buffers();
 }
 
 void Application::create_instance()
@@ -611,6 +679,7 @@ void Application::main_loop()
 
 void Application::cleanup()
 {
+    vk_destroy<vkDestroyCommandPool>(device_, command_pool_);
     vk_destroy<vkDestroyFramebuffer>(device_, swap_chain_frame_buffers_);
     vk_destroy<vkDestroyPipeline>(device_, graphics_pipeline_);
     vk_destroy<vkDestroyPipelineLayout>(device_, pipeline_layout_);

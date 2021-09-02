@@ -36,12 +36,16 @@ private:
     void create_render_pass();
     void create_graphics_pipeline();
     void create_frame_buffers();
+    void create_command_pool();
+    void create_command_buffers();
     VkShaderModule create_shader_module(const std::filesystem::path& file, std::vector<ui8>& cache);
     void checkValidationLayerSupport();
     void initialize_vulkan();
     void create_instance();
+
     void initialize_window();
     void main_loop();
+
     void cleanup();
     VkSurfaceFormatKHR choose_surface_format() const;
     VkPresentModeKHR choose_present_mode() const;
@@ -84,14 +88,16 @@ private:
     std::vector<const char*> validation_layers_;
     std::vector<const char*> device_extensions_;
     std::vector<VkFramebuffer> swap_chain_frame_buffers_;
+    std::vector<VkCommandBuffer> command_buffers_;
     std::filesystem::path executable_file_;
+    VkCommandPool command_pool_ = nullptr;
     VkPipeline graphics_pipeline_ = nullptr;
     VkRenderPass render_pass_ = nullptr;
     VkPipelineLayout pipeline_layout_ = nullptr;
     VkSwapchainKHR swap_chain_ = nullptr;
     VkSurfaceKHR surface_ = nullptr;
     PhysicalDeviceInfo device_info_;
-    VkDevice device_;
+    VkDevice device_ = nullptr;
     GLFWwindow* window_ = nullptr;
     VkInstance instance_ = nullptr;
     ui32 window_width_ = kDefaultWindowWidth;
