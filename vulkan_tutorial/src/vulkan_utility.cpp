@@ -1,5 +1,8 @@
 #include "vulkan_utility.h"
 
+#include <cassert>
+
+#include "macro.h"
 #include "integer.h"
 #include "error_handling.h"
 
@@ -65,3 +68,57 @@ void VulkanUtility::get_swap_chain_images(VkDevice device, VkSwapchainKHR swap_c
 {
     VK_GET_ARRAY(vkGetSwapchainImagesKHR, images, device, swap_chain);
 }
+
+std::string_view VulkanUtility::serveriity_to_string(VkDebugUtilsMessageSeverityFlagBitsEXT severity)
+{
+    switch (severity)
+    {
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT: return "verbose";
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT: return "info";
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT: return "warning";
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT: return "error";
+    }
+
+    assert(false);
+    return "unknown severity";
+}
+
+std::string_view VulkanUtility::vk_result_to_string(VkResult vk_result) noexcept
+{
+#define BCASE(x) case x: return TOSTRING(x)
+    switch (vk_result)
+    {
+        BCASE(VK_SUCCESS);
+        BCASE(VK_NOT_READY);
+        BCASE(VK_TIMEOUT);
+        BCASE(VK_EVENT_SET);
+        BCASE(VK_EVENT_RESET);
+        BCASE(VK_INCOMPLETE);
+        BCASE(VK_ERROR_OUT_OF_HOST_MEMORY);
+        BCASE(VK_ERROR_OUT_OF_DEVICE_MEMORY);
+        BCASE(VK_ERROR_INITIALIZATION_FAILED);
+        BCASE(VK_ERROR_DEVICE_LOST);
+        BCASE(VK_ERROR_MEMORY_MAP_FAILED);
+        BCASE(VK_ERROR_LAYER_NOT_PRESENT);
+        BCASE(VK_ERROR_EXTENSION_NOT_PRESENT);
+        BCASE(VK_ERROR_FEATURE_NOT_PRESENT);
+        BCASE(VK_ERROR_INCOMPATIBLE_DRIVER);
+        BCASE(VK_ERROR_TOO_MANY_OBJECTS);
+        BCASE(VK_ERROR_FORMAT_NOT_SUPPORTED);
+        BCASE(VK_ERROR_FRAGMENTED_POOL);
+        BCASE(VK_ERROR_UNKNOWN);
+        BCASE(VK_ERROR_OUT_OF_POOL_MEMORY);
+        BCASE(VK_ERROR_INVALID_EXTERNAL_HANDLE);
+        BCASE(VK_ERROR_SURFACE_LOST_KHR);
+        BCASE(VK_ERROR_NATIVE_WINDOW_IN_USE_KHR);
+        BCASE(VK_SUBOPTIMAL_KHR);
+        BCASE(VK_ERROR_OUT_OF_DATE_KHR);
+        BCASE(VK_ERROR_VALIDATION_FAILED_EXT);
+    }
+
+    assert(false);
+    return "UNKNOWN ERROR CODE";
+#undef BCASE
+}
+
+#undef VK_GET_ARRAY

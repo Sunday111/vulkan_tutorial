@@ -1,22 +1,44 @@
 #pragma once
 
-#include <string>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 
 #include "fmt/format.h"
 #include "vulkan/vulkan.h"
+#include "vulkan_utility.h"
 
-std::string vk_result_to_string(VkResult vk_result);
+template
+<
+    typename Exception = std::runtime_error,
+    typename... Args
+>
+void vk_expect(VkResult actual, VkResult expected, const std::string_view& description_format, Args&&... args)
+{
+    [[unlikely]]
+    if (expected != actual)
+    {
+        const auto expected_str = VulkanUtility::vk_result_to_string(expected);
+        const auto actual_str = VulkanUtility::vk_result_to_string(actual);
+        const auto description = fmt::format(description_format, std::forward<Args>(args)...);
+        auto message = fmt::format(
+            "operation failed:\n"
+                "\texpected: {}\n"
+                "\tactual: {}\n"
+                "\tdescription: {}\n",
+            expected_str,
+            actual_str,
+            description);
+        throw Exception(std::move(message));
+    }
+}
 
-template<typename... Args>
+template
+<
+    typename Exception = std::runtime_error,
+    typename... Args
+>
 void vk_expect_success(VkResult result, const std::string_view& description_format, Args&&... args)
 {
-	[[unlikely]]
-	if (result != VK_SUCCESS)
-	{
-		auto description = fmt::format(description_format, std::forward<Args>(args)...);
-		auto message = fmt::format("operation failed:\n\tdescription: {}\n\terror: {}\n",
-			description, vk_result_to_string(result));
-		throw std::runtime_error(std::move(message));
-	}
+    vk_expect<Exception>(result, VK_SUCCESS, description_format, std::forward<Args>(args)...);
 }

@@ -6,21 +6,10 @@
 #include "vulkan/vulkan.h"
 #include "integer.h"
 
-struct SwapChainSupportDetails
-{
-    // chooses surface format which is closest to preferred
-    // must be called only if 'formats' is not empty, otherwise - UB
-    [[nodiscard]] VkSurfaceFormatKHR choose_surface_format(const VkSurfaceFormatKHR& preferred) const noexcept;
-
-    VkSurfaceCapabilitiesKHR capabilities;
-    std::vector<VkSurfaceFormatKHR> formats;
-    std::vector<VkPresentModeKHR> present_modes;
-};
-
 class PhysicalDeviceInfo
 {
 public:
-    void set_device(VkPhysicalDevice new_device, VkSurfaceKHR present_surface);
+    void populate(VkPhysicalDevice new_device, VkSurfaceKHR present_surface);
     [[nodiscard]] bool has_extension(std::string_view name) const noexcept;
     [[nodiscard]] int rate_device() const noexcept;
     void populate_index_cache(VkSurfaceKHR surface);
@@ -34,7 +23,6 @@ public:
     [[nodiscard]] ui32 get_present_queue_family_index() const noexcept { return static_cast<ui32>(present_fi_); }
 
 public:
-    SwapChainSupportDetails swapchain;
     VkPhysicalDevice device = VK_NULL_HANDLE;
     VkPhysicalDeviceProperties properties;
     VkPhysicalDeviceFeatures features;

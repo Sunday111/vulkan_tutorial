@@ -1,41 +1,18 @@
 #include "application.h"
-#include "error_handling.h"
-#include <GLFW/glfw3.h>
+
 #include <algorithm>
 #include <array>
-#include <string_view>
-#include <stdexcept>
-#include <cassert>
-#include <ranges>
 #include <cmath>
-#include <fstream>
+#include <ranges>
+#include <stdexcept>
+#include <string_view>
 
+#include <GLFW/glfw3.h>
+
+#include "error_handling.h"
 #include "unused_var.h"
 #include "vulkan_utility.h"
-#include "device/physical_device_info.h"
-
-template<typename T, typename = std::enable_if_t<sizeof(T) == sizeof(char)>>
-void read_file(const std::filesystem::path& path, std::vector<T>& buffer)
-{
-    std::ifstream file(path, std::ios::binary | std::ios::ate);
-    
-    [[unlikely]]
-    if (!file.is_open())
-    {
-        auto message = fmt::format("failed to open file {}", path.string());
-        throw std::runtime_error(std::move(message));
-    }
-    const std::streamsize size = file.tellg();
-    file.seekg(0, std::ios::beg);
-    buffer.resize(size);
-    
-    [[unlikely]]
-    if (!file.read((char*)buffer.data(), size))
-    {
-        auto message = fmt::format("failed to read {} bytes from file {}", size, path.string());
-        throw std::runtime_error(std::move(message));
-    }
-}
+#include "read_file.h"
 
 void destroy_debug_messenger(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) {
     auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
@@ -43,20 +20,6 @@ void destroy_debug_messenger(VkInstance instance, VkDebugUtilsMessengerEXT debug
     {
         func(instance, debugMessenger, pAllocator);
     }
-}
-
-std::string_view serveriity_to_string(VkDebugUtilsMessageSeverityFlagBitsEXT severity)
-{
-    switch (severity)
-    {
-    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT: return "verbose";
-    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT: return "info";
-    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT: return "warning";
-    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT: return "error";
-    }
-
-    assert(false);
-    return "unknown severity";
 }
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
@@ -68,7 +31,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
     unused_var(pUserData, messageType);
     fmt::print(
         "validation layer [{}]: {}\n",
-        serveriity_to_string(severity), pCallbackData->pMessage);
+        VulkanUtility::serveriity_to_string(severity), pCallbackData->pMessage);
 
     return VK_FALSE;
 }
@@ -136,7 +99,7 @@ void Application::pick_physical_device()
     for(size_t i = 0; i < devices.size(); ++i)
     {
         PhysicalDeviceInfo device_info;
-        device_info.set_device(devices[i], surface_);
+        device_info.populate(devices[i], surface_);
 
         bool has_extensions = true;
         for (auto& required_extension : device_extensions_)
@@ -153,9 +116,11 @@ void Application::pick_physical_device()
             continue;
         }
 
-        // Check swapchain
-        if (device_info.swapchain.formats.empty() ||
-            device_info.swapchain.present_modes.empty())
+        // Check swapchain compatibility
+        DeviceSurfaceInfo surface_info;
+        surface_info.populate(devices[i], surface_);
+        if (surface_info.formats.empty() ||
+            surface_info.present_modes.empty())
         {
             continue;
         }
@@ -165,6 +130,7 @@ void Application::pick_physical_device()
         {
             best_score = score;
             device_info_ = std::move(device_info);
+            surface_info_ = std::move(surface_info);
         }
     }
 
@@ -236,11 +202,11 @@ void Application::create_swap_chain()
     const VkPresentModeKHR presentMode = choose_present_mode();
     swap_chain_extent_ = choose_swap_extent();
     
-    ui32 image_count = device_info_.swapchain.capabilities.minImageCount + 1;
-    if (device_info_.swapchain.capabilities.maxImageCount > 0 &&
-        image_count > device_info_.swapchain.capabilities.maxImageCount)
+    ui32 image_count = surface_info_.capabilities.minImageCount + 1;
+    if (surface_info_.capabilities.maxImageCount > 0 &&
+        image_count > surface_info_.capabilities.maxImageCount)
     {
-        image_count = device_info_.swapchain.capabilities.maxImageCount;
+        image_count = surface_info_.capabilities.maxImageCount;
     }
 
     VkSwapchainCreateInfoKHR createInfo{};
@@ -272,7 +238,7 @@ void Application::create_swap_chain()
         createInfo.pQueueFamilyIndices = nullptr; // Optional
     }
 
-    createInfo.preTransform = device_info_.swapchain.capabilities.currentTransform;
+    createInfo.preTransform = surface_info_.capabilities.currentTransform;
     createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     createInfo.presentMode = presentMode;
     createInfo.clipped = VK_TRUE;
@@ -361,9 +327,9 @@ void Application::create_render_pass()
 
 void Application::create_graphics_pipeline()
 {
-    auto shaders_dir = executable_file_.parent_path() / "shaders";
+    const auto shaders_dir = get_shaders_dir();
 
-    std::vector<ui8> cache;
+    std::vector<char> cache;
     VkShaderModule vert_shader_module = create_shader_module(shaders_dir / "vertex_shader.spv", cache);
     VkShaderModule fragment_shader_module = create_shader_module(shaders_dir / "fragment_shader.spv", cache);
 
@@ -487,8 +453,8 @@ void Application::create_graphics_pipeline()
         vkCreateGraphicsPipelines(device_, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &graphics_pipeline_),
         "vkCreateGraphicsPipelines at {}", __LINE__);
 
-    vk_destroy<vkDestroyShaderModule>(device_, vert_shader_module);
-    vk_destroy<vkDestroyShaderModule>(device_, fragment_shader_module);
+    VulkanUtility::destroy<vkDestroyShaderModule>(device_, vert_shader_module);
+    VulkanUtility::destroy<vkDestroyShaderModule>(device_, fragment_shader_module);
 }
 
 void Application::create_frame_buffers()
@@ -581,7 +547,7 @@ void Application::create_command_buffers()
     }
 }
 
-VkShaderModule Application::create_shader_module(const std::filesystem::path& file, std::vector<ui8>& shader_code)
+VkShaderModule Application::create_shader_module(const std::filesystem::path& file, std::vector<char>& shader_code)
 {
     read_file(file, shader_code);
 
@@ -642,7 +608,7 @@ void Application::initialize_vulkan()
     create_frame_buffers();
     create_command_pool();
     create_command_buffers();
-    create_semaphores();
+    create_sync_objects();
 }
 
 void Application::create_instance()
@@ -688,17 +654,34 @@ void Application::main_loop()
 
 void Application::draw_frame()
 {
+    // first check that nobody does not draw to current frame
+    vk_expect_success(
+        vkWaitForFences(device_, 1, &in_flight_fences_[current_frame_], VK_TRUE, UINT64_MAX),
+        "vkWaitForFences");
+
+    // get next image index from the swap chain
     ui32 image_index;
     vk_expect_success(
-        vkAcquireNextImageKHR(device_, swap_chain_, UINT64_MAX, image_available_semaphore_, VK_NULL_HANDLE, &image_index),
+        vkAcquireNextImageKHR(device_, swap_chain_, UINT64_MAX, image_available_semaphores_[current_frame_], VK_NULL_HANDLE, &image_index),
         "vkAcquireNextImageKHR");
+
+    // Check if a previous frame is using this image (i.e. there is its fence to wait on)
+    if (auto fence = images_in_flight_[image_index]; fence != VK_NULL_HANDLE)
+    {
+        vk_expect_success(
+            vkWaitForFences(device_, 1, &fence, VK_TRUE, UINT64_MAX),
+            "vkWaitForFences");
+    }
+
+    // Mark the image as now being in use by this frame
+    images_in_flight_[image_index] = in_flight_fences_[current_frame_];
 
     VkSubmitInfo submit_info{};
     submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-    const std::array wait_semaphores{ image_available_semaphore_ };
+    const std::array wait_semaphores{ image_available_semaphores_[current_frame_] };
     const ui32 num_wait_semaphores = static_cast<ui32>(wait_semaphores.size());
-    const std::array signal_semaphores{ render_finished_semaphore_ };
+    const std::array signal_semaphores{ render_finished_semaphores_[current_frame_] };
     const ui32 num_signal_semaphores = static_cast<ui32>(signal_semaphores.size());
     const std::array swap_chains{ swap_chain_ };
     const ui32 num_swap_chains = static_cast<ui32>(swap_chains.size());
@@ -713,7 +696,11 @@ void Application::draw_frame()
     submit_info.pSignalSemaphores = signal_semaphores.data();
 
     vk_expect_success(
-        vkQueueSubmit(graphics_queue_, 1, &submit_info, VK_NULL_HANDLE),
+        vkResetFences(device_, 1, &in_flight_fences_[current_frame_]),
+        "vkResetFences");
+
+    vk_expect_success(
+        vkQueueSubmit(graphics_queue_, 1, &submit_info, in_flight_fences_[current_frame_]),
         "vkQueueSubmit");
 
     VkPresentInfoKHR present_info{};
@@ -730,22 +717,26 @@ void Application::draw_frame()
         "vkQueuePresentKHR");
 
     vkDeviceWaitIdle(device_);
+
+    current_frame_ = (current_frame_ + 1) % kMaxFramesInFlight;
 }
 
 void Application::cleanup()
 {
-    vk_destroy<vkDestroySemaphore>(device_, render_finished_semaphore_);
-    vk_destroy<vkDestroySemaphore>(device_, image_available_semaphore_);
-    vk_destroy<vkDestroyCommandPool>(device_, command_pool_);
-    vk_destroy<vkDestroyFramebuffer>(device_, swap_chain_frame_buffers_);
-    vk_destroy<vkDestroyPipeline>(device_, graphics_pipeline_);
-    vk_destroy<vkDestroyPipelineLayout>(device_, pipeline_layout_);
-    vk_destroy<vkDestroyRenderPass>(device_, render_pass_);
-    vk_destroy<vkDestroyImageView>(device_, swap_chain_image_views_);
-    vk_destroy<vkDestroySwapchainKHR>(device_, swap_chain_);
-    vk_destroy<vkDestroyDevice>(device_);
-    vk_destroy<vkDestroySurfaceKHR>(instance_, surface_);
-    vk_destroy<vkDestroyInstance>(instance_);
+    using Vk = VulkanUtility;
+    Vk::destroy<vkDestroyFence>(device_, in_flight_fences_);
+    Vk::destroy<vkDestroySemaphore>(device_, render_finished_semaphores_);
+    Vk::destroy<vkDestroySemaphore>(device_, image_available_semaphores_);
+    Vk::destroy<vkDestroyCommandPool>(device_, command_pool_);
+    Vk::destroy<vkDestroyFramebuffer>(device_, swap_chain_frame_buffers_);
+    Vk::destroy<vkDestroyPipeline>(device_, graphics_pipeline_);
+    Vk::destroy<vkDestroyPipelineLayout>(device_, pipeline_layout_);
+    Vk::destroy<vkDestroyRenderPass>(device_, render_pass_);
+    Vk::destroy<vkDestroyImageView>(device_, swap_chain_image_views_);
+    Vk::destroy<vkDestroySwapchainKHR>(device_, swap_chain_);
+    Vk::destroy<vkDestroyDevice>(device_);
+    Vk::destroy<vkDestroySurfaceKHR>(instance_, surface_);
+    Vk::destroy<vkDestroyInstance>(instance_);
 
     if (window_)
     {
@@ -767,7 +758,7 @@ VkSurfaceFormatKHR Application::choose_surface_format() const
         VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
     };
 
-    return device_info_.swapchain.choose_surface_format(preferred_format);
+    return surface_info_.choose_surface_format(preferred_format);
 }
 
 VkPresentModeKHR Application::choose_present_mode() const
@@ -782,7 +773,7 @@ VkPresentModeKHR Application::choose_present_mode() const
 
     size_t best_index = 0;
     int best_score = -1;
-    auto& modes = device_info_.swapchain.present_modes;
+    auto& modes = surface_info_.present_modes;
     for (size_t i = 0; i < modes.size(); ++i)
     {
         auto it = std::find(priority.begin(), priority.end(), modes[i]);
@@ -797,12 +788,17 @@ VkPresentModeKHR Application::choose_present_mode() const
         }
     }
 
-    return device_info_.swapchain.present_modes[best_index];
+    return surface_info_.present_modes[best_index];
+}
+
+std::filesystem::path Application::get_shaders_dir() const noexcept
+{
+    return executable_file_.parent_path() / "shaders";
 }
 
 VkExtent2D Application::choose_swap_extent() const
 {
-    auto& capabilities = device_info_.swapchain.capabilities;
+    auto& capabilities = surface_info_.capabilities;
 
     if (capabilities.currentExtent.width != UINT32_MAX)
     {
@@ -836,20 +832,47 @@ std::vector<const char*> Application::get_required_extensions()
     return extensions;
 }
 
-void Application::create_semaphores()
+void Application::create_sync_objects()
 {
-    auto make_one = [dev = device_]()
+    auto make_semaphore = [dev = device_]()
     {
         VkSemaphore semaphore;
-        VkSemaphoreCreateInfo semaphoreInfo{};
-        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        VkSemaphoreCreateInfo create_info{};
+        create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
         vk_expect_success(
-            vkCreateSemaphore(dev, &semaphoreInfo, nullptr, &semaphore),
-            "vkCreateSemaphore for image_available_semaphore_"
+            vkCreateSemaphore(dev, &create_info, nullptr, &semaphore),
+            "vkCreateSemaphore"
         );
         return semaphore;
     };
 
-    image_available_semaphore_ = make_one();
-    render_finished_semaphore_ = make_one();
+    auto make_fence = [dev = device_]()
+    {
+        VkFence fence;
+        VkFenceCreateInfo create_info{};
+        create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+        vk_expect_success(
+            vkCreateFence(dev, &create_info, nullptr, &fence),
+            "vkCreateFence"
+        );
+        return fence;
+    };
+
+    auto make_n = [](ui32 n, auto& make_one)
+    {
+        std::vector<decltype(make_one())> semaphores;
+        semaphores.reserve(n);
+        for (size_t i = 0; i < kMaxFramesInFlight; ++i)
+        {
+            semaphores.push_back(make_one());
+        }
+
+        return semaphores;
+    };
+
+    image_available_semaphores_ = make_n(kMaxFramesInFlight, make_semaphore);
+    render_finished_semaphores_ = make_n(kMaxFramesInFlight, make_semaphore);
+    in_flight_fences_ = make_n(kMaxFramesInFlight, make_fence);
+    images_in_flight_.resize(swap_chain_image_views_.size(), VK_NULL_HANDLE);
 }

@@ -5,15 +5,18 @@
 #include <memory>
 #include <filesystem>
 
-#include "integer.h"
 #include "vulkan/vulkan.h"
-#include "device/physical_device_info.h"
+
+#include "integer.h"
+#include "physical_device_info.h"
+#include "device_surface_info.h"
 
 struct GLFWwindow;
 
 class Application
 {
 public:
+    static constexpr size_t kMaxFramesInFlight = 2;
     static constexpr ui32 kDefaultWindowWidth = 800;
     static constexpr ui32 kDefaultWindowHeight = 600;
 
@@ -37,8 +40,8 @@ private:
     void create_frame_buffers();
     void create_command_pool();
     void create_command_buffers();
-    void create_semaphores();
-    VkShaderModule create_shader_module(const std::filesystem::path& file, std::vector<ui8>& cache);
+    void create_sync_objects();
+    VkShaderModule create_shader_module(const std::filesystem::path& file, std::vector<char>& cache);
     void checkValidationLayerSupport();
     void initialize_vulkan();
     void create_instance();
@@ -52,36 +55,7 @@ private:
     VkPresentModeKHR choose_present_mode() const;
     VkExtent2D choose_swap_extent() const;
     std::vector<const char*> get_required_extensions();
-
-    template<auto fn, typename Handle>
-    static void vk_destroy(Handle& handle, const VkAllocationCallbacks* allocation_callbacks = nullptr) noexcept
-    {
-        if (handle)
-        {
-            fn(handle, allocation_callbacks);
-            handle = nullptr;
-        }
-    }
-
-    template<auto fn, typename Owner, typename Handle>
-    static void vk_destroy(Owner& owner, Handle& handle, const VkAllocationCallbacks* allocation_callbacks = nullptr) noexcept
-    {
-        if (handle)
-        {
-            fn(owner, handle, allocation_callbacks);
-            handle = nullptr;
-        }
-    }
-
-    template<auto fn, typename Owner, typename Handle>
-    static void vk_destroy(Owner& owner, std::vector<Handle>& handles, const VkAllocationCallbacks* allocation_callbacks = nullptr)
-    {
-        while (!handles.empty())
-        {
-            vk_destroy<fn>(owner, handles.back(), allocation_callbacks);
-            handles.pop_back();
-        }
-    }
+    [[nodiscard]] std::filesystem::path get_shaders_dir() const noexcept;
 
 private:
     std::vector<VkImage> swap_chain_images_;
@@ -90,11 +64,13 @@ private:
     std::vector<const char*> device_extensions_;
     std::vector<VkFramebuffer> swap_chain_frame_buffers_;
     std::vector<VkCommandBuffer> command_buffers_;
+    std::vector<VkSemaphore> image_available_semaphores_;
+    std::vector<VkSemaphore> render_finished_semaphores_;
+    std::vector<VkFence> in_flight_fences_; // indexed by current frame
+    std::vector<VkFence> images_in_flight_; // indexed by image index
     std::filesystem::path executable_file_;
     VkQueue graphics_queue_ = nullptr;
     VkQueue present_queue_ = nullptr;
-    VkSemaphore image_available_semaphore_;
-    VkSemaphore render_finished_semaphore_;
     VkCommandPool command_pool_ = nullptr;
     VkPipeline graphics_pipeline_ = nullptr;
     VkRenderPass render_pass_ = nullptr;
@@ -102,12 +78,14 @@ private:
     VkSwapchainKHR swap_chain_ = nullptr;
     VkSurfaceKHR surface_ = nullptr;
     PhysicalDeviceInfo device_info_;
+    DeviceSurfaceInfo surface_info_;
     VkDevice device_ = nullptr;
     GLFWwindow* window_ = nullptr;
     VkInstance instance_ = nullptr;
+    size_t current_frame_ = 0;
     ui32 window_width_ = kDefaultWindowWidth;
     ui32 window_height_ = kDefaultWindowHeight;
-    VkFormat swap_chain_image_format_;
-    VkExtent2D swap_chain_extent_;
+    VkFormat swap_chain_image_format_ = {};
+    VkExtent2D swap_chain_extent_ = {};
     ui8 glfw_initialized : 1;
 };
