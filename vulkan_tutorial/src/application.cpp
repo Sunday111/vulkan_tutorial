@@ -228,9 +228,8 @@ void Application::create_device()
         "vkCreateDevice - create logical device for {}", device_info_.properties.deviceName);
 
     device_ = logical_device;
-    //VkQueue graphics_queue = device_.get_queue(device_info_.get_graphics_queue_family_index(), 0);
-    //VkQueue present_queue = device_.get_queue(device_info_.get_present_queue_family_index(), 0);
-    //unused_var(graphics_queue, present_queue);
+    vkGetDeviceQueue(device_, device_info_.get_graphics_queue_family_index(), 0, &graphics_queue_);
+    vkGetDeviceQueue(device_, device_info_.get_present_queue_family_index(), 0, &present_queue_);
 }
 
 void Application::create_swap_chain()
@@ -340,12 +339,22 @@ void Application::create_render_pass()
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &color_attachment_ref;
 
+    VkSubpassDependency dependency{};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.srcAccessMask = 0;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
     VkRenderPassCreateInfo render_pass_create_info{};
     render_pass_create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     render_pass_create_info.attachmentCount = 1;
     render_pass_create_info.pAttachments = &color_attachment;
     render_pass_create_info.subpassCount = 1;
     render_pass_create_info.pSubpasses = &subpass;
+    render_pass_create_info.dependencyCount = 1;
+    render_pass_create_info.pDependencies = &dependency;
 
     vk_expect_success(
         vkCreateRenderPass(device_, &render_pass_create_info, nullptr, &render_pass_),
@@ -635,6 +644,7 @@ void Application::initialize_vulkan()
     create_frame_buffers();
     create_command_pool();
     create_command_buffers();
+    create_semaphores();
 }
 
 void Application::create_instance()
@@ -674,11 +684,60 @@ void Application::main_loop()
     while (!glfwWindowShouldClose(window_))
     {
         glfwPollEvents();
+        draw_frame();
     }
+}
+
+void Application::draw_frame()
+{
+    ui32 image_index;
+    vk_expect_success(
+        vkAcquireNextImageKHR(device_, swap_chain_, UINT64_MAX, image_available_semaphore_, VK_NULL_HANDLE, &image_index),
+        "vkAcquireNextImageKHR");
+
+    VkSubmitInfo submit_info{};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+    const std::array wait_semaphores{ image_available_semaphore_ };
+    const ui32 num_wait_semaphores = static_cast<ui32>(wait_semaphores.size());
+    const std::array signal_semaphores{ render_finished_semaphore_ };
+    const ui32 num_signal_semaphores = static_cast<ui32>(signal_semaphores.size());
+    const std::array swap_chains{ swap_chain_ };
+    const ui32 num_swap_chains = static_cast<ui32>(swap_chains.size());
+
+    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+    submit_info.waitSemaphoreCount = num_wait_semaphores;
+    submit_info.pWaitSemaphores = wait_semaphores.data();
+    submit_info.pWaitDstStageMask = waitStages;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &command_buffers_[image_index];
+    submit_info.signalSemaphoreCount = num_signal_semaphores;
+    submit_info.pSignalSemaphores = signal_semaphores.data();
+
+    vk_expect_success(
+        vkQueueSubmit(graphics_queue_, 1, &submit_info, VK_NULL_HANDLE),
+        "vkQueueSubmit");
+
+    VkPresentInfoKHR present_info{};
+    present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    present_info.waitSemaphoreCount = num_wait_semaphores;
+    present_info.pWaitSemaphores = signal_semaphores.data();
+    present_info.swapchainCount = num_swap_chains;
+    present_info.pSwapchains = swap_chains.data();
+    present_info.pImageIndices = &image_index;
+    present_info.pResults = nullptr;
+
+    vk_expect_success(
+        vkQueuePresentKHR(present_queue_, &present_info),
+        "vkQueuePresentKHR");
+
+    vkDeviceWaitIdle(device_);
 }
 
 void Application::cleanup()
 {
+    vk_destroy<vkDestroySemaphore>(device_, render_finished_semaphore_);
+    vk_destroy<vkDestroySemaphore>(device_, image_available_semaphore_);
     vk_destroy<vkDestroyCommandPool>(device_, command_pool_);
     vk_destroy<vkDestroyFramebuffer>(device_, swap_chain_frame_buffers_);
     vk_destroy<vkDestroyPipeline>(device_, graphics_pipeline_);
@@ -777,4 +836,22 @@ std::vector<const char*> Application::get_required_extensions()
 #endif
 
     return extensions;
+}
+
+void Application::create_semaphores()
+{
+    auto make_one = [dev = device_]()
+    {
+        VkSemaphore semaphore;
+        VkSemaphoreCreateInfo semaphoreInfo{};
+        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        vk_expect_success(
+            vkCreateSemaphore(dev, &semaphoreInfo, nullptr, &semaphore),
+            "vkCreateSemaphore for image_available_semaphore_"
+        );
+        return semaphore;
+    };
+
+    image_available_semaphore_ = make_one();
+    render_finished_semaphore_ = make_one();
 }

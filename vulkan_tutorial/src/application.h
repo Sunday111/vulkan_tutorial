@@ -38,6 +38,7 @@ private:
     void create_frame_buffers();
     void create_command_pool();
     void create_command_buffers();
+    void create_semaphores();
     VkShaderModule create_shader_module(const std::filesystem::path& file, std::vector<ui8>& cache);
     void checkValidationLayerSupport();
     void initialize_vulkan();
@@ -45,6 +46,7 @@ private:
 
     void initialize_window();
     void main_loop();
+    void draw_frame();
 
     void cleanup();
     VkSurfaceFormatKHR choose_surface_format() const;
@@ -90,6 +92,10 @@ private:
     std::vector<VkFramebuffer> swap_chain_frame_buffers_;
     std::vector<VkCommandBuffer> command_buffers_;
     std::filesystem::path executable_file_;
+    VkQueue graphics_queue_ = nullptr;
+    VkQueue present_queue_ = nullptr;
+    VkSemaphore image_available_semaphore_;
+    VkSemaphore render_finished_semaphore_;
     VkCommandPool command_pool_ = nullptr;
     VkPipeline graphics_pipeline_ = nullptr;
     VkRenderPass render_pass_ = nullptr;
