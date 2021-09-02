@@ -7,7 +7,6 @@
 
 #include "integer.h"
 #include "vulkan/vulkan.h"
-#include "device/vulkan_device.h"
 #include "device/physical_device_info.h"
 
 struct GLFWwindow;

@@ -13,8 +13,6 @@
 #include "unused_var.h"
 #include "vulkan_utility.h"
 #include "device/physical_device_info.h"
-#include "device/vulkan_device.h"
-#include <unordered_map>
 
 template<typename T, typename = std::enable_if_t<sizeof(T) == sizeof(char)>>
 void read_file(const std::filesystem::path& path, std::vector<T>& buffer)
