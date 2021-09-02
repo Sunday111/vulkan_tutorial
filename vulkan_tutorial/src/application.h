@@ -35,6 +35,7 @@ private:
     void create_swap_chain_image_views();
     void create_render_pass();
     void create_graphics_pipeline();
+    void create_frame_buffers();
     VkShaderModule create_shader_module(const std::filesystem::path& file, std::vector<ui8>& cache);
     void checkValidationLayerSupport();
     void initialize_vulkan();
@@ -67,11 +68,22 @@ private:
         }
     }
 
+    template<auto fn, typename Owner, typename Handle>
+    static void vk_destroy(Owner& owner, std::vector<Handle>& handles, const VkAllocationCallbacks* allocation_callbacks = nullptr)
+    {
+        while (!handles.empty())
+        {
+            vk_destroy<fn>(owner, handles.back(), allocation_callbacks);
+            handles.pop_back();
+        }
+    }
+
 private:
     std::vector<VkImage> swap_chain_images_;
     std::vector<VkImageView> swap_chain_image_views_;
     std::vector<const char*> validation_layers_;
     std::vector<const char*> device_extensions_;
+    std::vector<VkFramebuffer> swap_chain_frame_buffers_;
     std::filesystem::path executable_file_;
     VkPipeline graphics_pipeline_ = nullptr;
     VkRenderPass render_pass_ = nullptr;
@@ -79,7 +91,7 @@ private:
     VkSwapchainKHR swap_chain_ = nullptr;
     VkSurfaceKHR surface_ = nullptr;
     PhysicalDeviceInfo device_info_;
-    VulkanDevice device_;
+    VkDevice device_;
     GLFWwindow* window_ = nullptr;
     VkInstance instance_ = nullptr;
     ui32 window_width_ = kDefaultWindowWidth;

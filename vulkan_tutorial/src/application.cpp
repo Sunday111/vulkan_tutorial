@@ -228,9 +228,9 @@ void Application::create_device()
         "vkCreateDevice - create logical device for {}", device_info_.properties.deviceName);
 
     device_ = logical_device;
-    VkQueue graphics_queue = device_.get_queue(device_info_.get_graphics_queue_family_index(), 0);
-    VkQueue present_queue = device_.get_queue(device_info_.get_present_queue_family_index(), 0);
-    unused_var(graphics_queue, present_queue);
+    //VkQueue graphics_queue = device_.get_queue(device_info_.get_graphics_queue_family_index(), 0);
+    //VkQueue present_queue = device_.get_queue(device_info_.get_present_queue_family_index(), 0);
+    //unused_var(graphics_queue, present_queue);
 }
 
 void Application::create_swap_chain()
@@ -484,6 +484,30 @@ void Application::create_graphics_pipeline()
     vk_destroy<vkDestroyShaderModule>(device_, fragment_shader_module);
 }
 
+void Application::create_frame_buffers()
+{
+    const size_t num_images = static_cast<ui32>(swap_chain_image_views_.size());
+    swap_chain_frame_buffers_.resize(num_images);
+
+    for (size_t index = 0; index < num_images; ++index)
+    {
+        std::array attachments{ swap_chain_image_views_[index] };
+
+        VkFramebufferCreateInfo frame_buffer_info{};
+        frame_buffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        frame_buffer_info.renderPass = render_pass_;
+        frame_buffer_info.attachmentCount = static_cast<ui32>(attachments.size());
+        frame_buffer_info.pAttachments = attachments.data();
+        frame_buffer_info.width = swap_chain_extent_.width;
+        frame_buffer_info.height = swap_chain_extent_.height;
+        frame_buffer_info.layers = 1;
+
+        vk_expect_success(
+            vkCreateFramebuffer(device_, &frame_buffer_info, nullptr, &swap_chain_frame_buffers_[index]),
+            "vkCreateFramebuffer [{}/{}] at {}", index, num_images, __LINE__);
+    }
+}
+
 VkShaderModule Application::create_shader_module(const std::filesystem::path& file, std::vector<ui8>& shader_code)
 {
     read_file(file, shader_code);
@@ -542,6 +566,7 @@ void Application::initialize_vulkan()
     create_swap_chain_image_views();
     create_render_pass();
     create_graphics_pipeline();
+    create_frame_buffers();
 }
 
 void Application::create_instance()
@@ -586,18 +611,13 @@ void Application::main_loop()
 
 void Application::cleanup()
 {
+    vk_destroy<vkDestroyFramebuffer>(device_, swap_chain_frame_buffers_);
     vk_destroy<vkDestroyPipeline>(device_, graphics_pipeline_);
     vk_destroy<vkDestroyPipelineLayout>(device_, pipeline_layout_);
     vk_destroy<vkDestroyRenderPass>(device_, render_pass_);
-
-    while (!swap_chain_image_views_.empty())
-    {
-        vkDestroyImageView(device_, swap_chain_image_views_.back(), nullptr);
-        swap_chain_image_views_.pop_back();
-    }
-
+    vk_destroy<vkDestroyImageView>(device_, swap_chain_image_views_);
     vk_destroy<vkDestroySwapchainKHR>(device_, swap_chain_);
-    device_ = nullptr;
+    vk_destroy<vkDestroyDevice>(device_);
     vk_destroy<vkDestroySurfaceKHR>(instance_, surface_);
     vk_destroy<vkDestroyInstance>(instance_);
 
