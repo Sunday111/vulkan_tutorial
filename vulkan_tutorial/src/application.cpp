@@ -8,12 +8,36 @@
 #include <cassert>
 #include <ranges>
 #include <cmath>
+#include <fstream>
 
 #include "unused_var.h"
 #include "vulkan_utility.h"
 #include "device/physical_device_info.h"
 #include "device/vulkan_device.h"
 #include <unordered_map>
+
+template<typename T, typename = std::enable_if_t<sizeof(T) == sizeof(char)>>
+void read_file(const std::filesystem::path& path, std::vector<T>& buffer)
+{
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    
+    [[unlikely]]
+    if (!file.is_open())
+    {
+        auto message = fmt::format("failed to open file {}", path.string());
+        throw std::runtime_error(std::move(message));
+    }
+    const std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+    buffer.resize(size);
+    
+    [[unlikely]]
+    if (!file.read((char*)buffer.data(), size))
+    {
+        auto message = fmt::format("failed to read {} bytes from file {}", size, path.string());
+        throw std::runtime_error(std::move(message));
+    }
+}
 
 void destroy_debug_messenger(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) {
     auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
@@ -65,6 +89,11 @@ Application::Application()
 Application::~Application()
 {
     cleanup();
+}
+
+void Application::set_executable_file(std::filesystem::path path)
+{
+    executable_file_ = path;
 }
 
 void Application::run()
@@ -290,6 +319,131 @@ void Application::create_swap_chain_image_views()
     }
 }
 
+void Application::create_graphics_pipeline()
+{
+    auto shaders_dir = executable_file_.parent_path() / "shaders";
+
+    std::vector<ui8> cache;
+    VkShaderModule vert_shader_module = create_shader_module(shaders_dir / "vertex_shader.spv", cache);
+    VkShaderModule fragment_shader_module = create_shader_module(shaders_dir / "fragment_shader.spv", cache);
+
+    VkPipelineShaderStageCreateInfo vert_shader_stage_create_info{};
+    vert_shader_stage_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vert_shader_stage_create_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vert_shader_stage_create_info.module = vert_shader_module;
+    vert_shader_stage_create_info.pName = "main";
+
+    VkPipelineShaderStageCreateInfo frag_shader_stage_create_info{};
+    frag_shader_stage_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    frag_shader_stage_create_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    frag_shader_stage_create_info.module = fragment_shader_module;
+    frag_shader_stage_create_info.pName = "main";
+
+    VkPipelineVertexInputStateCreateInfo vert_input_info{};
+    vert_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vert_input_info.vertexBindingDescriptionCount = 0;
+    vert_input_info.pVertexBindingDescriptions = nullptr; // Optional
+    vert_input_info.vertexAttributeDescriptionCount = 0;
+    vert_input_info.pVertexAttributeDescriptions = nullptr;
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(swap_chain_extent_.width);
+    viewport.height = static_cast<float>(swap_chain_extent_.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    VkRect2D scissor{};
+    scissor.offset = { 0, 0 };
+    scissor.extent = swap_chain_extent_;
+
+    VkPipelineViewportStateCreateInfo viewport_state{};
+    viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewport_state.viewportCount = 1;
+    viewport_state.pViewports = &viewport;
+    viewport_state.scissorCount = 1;
+    viewport_state.pScissors = &scissor;
+
+    VkPipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.depthClampEnable = VK_FALSE;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.lineWidth = 1.0f;
+    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    rasterizer.depthBiasEnable = VK_FALSE;
+    rasterizer.depthBiasConstantFactor = 0.0f; // Optional
+    rasterizer.depthBiasClamp = 0.0f; // Optional
+    rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
+
+    VkPipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.sampleShadingEnable = VK_FALSE;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    multisampling.minSampleShading = 1.0f; // Optional
+    multisampling.pSampleMask = nullptr; // Optional
+    multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
+    multisampling.alphaToOneEnable = VK_FALSE; // Optional
+
+    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachment.blendEnable = VK_FALSE;
+    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
+    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
+
+    VkPipelineColorBlendStateCreateInfo color_blending{};
+    color_blending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    color_blending.logicOpEnable = VK_FALSE;
+    color_blending.logicOp = VK_LOGIC_OP_COPY; // Optional
+    color_blending.attachmentCount = 1;
+    color_blending.pAttachments = &colorBlendAttachment;
+    color_blending.blendConstants[0] = 0.0f; // Optional
+    color_blending.blendConstants[1] = 0.0f; // Optional
+    color_blending.blendConstants[2] = 0.0f; // Optional
+    color_blending.blendConstants[3] = 0.0f; // Optional
+
+    VkPipelineLayoutCreateInfo pipline_layout_info{};
+    pipline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipline_layout_info.setLayoutCount = 0; // Optional
+    pipline_layout_info.pSetLayouts = nullptr; // Optional
+    pipline_layout_info.pushConstantRangeCount = 0; // Optional
+    pipline_layout_info.pPushConstantRanges = nullptr; // Optional
+
+    vk_expect_success(
+        vkCreatePipelineLayout(device_, &pipline_layout_info, nullptr, &pipeline_layout_),
+        "vkCreatePipelineLayout at ", __LINE__);
+
+    vkDestroyShaderModule(device_, vert_shader_module, nullptr);
+    vkDestroyShaderModule(device_, fragment_shader_module, nullptr);
+}
+
+VkShaderModule Application::create_shader_module(const std::filesystem::path& file, std::vector<ui8>& shader_code)
+{
+    read_file(file, shader_code);
+
+    VkShaderModuleCreateInfo create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    create_info.codeSize = shader_code.size();
+    create_info.pCode = reinterpret_cast<const uint32_t*>(shader_code.data());
+    VkShaderModule shader_module;
+    vk_expect_success(
+        vkCreateShaderModule(device_, &create_info, nullptr, &shader_module),
+        "vkCreateShaderModule");
+
+    return shader_module;
+}
+
 void Application::checkValidationLayerSupport()
 {
     if (validation_layers_.empty())
@@ -330,6 +484,7 @@ void Application::initialize_vulkan()
     create_device();
     create_swap_chain();
     create_swap_chain_image_views();
+    create_graphics_pipeline();
 }
 
 void Application::create_instance()
@@ -374,6 +529,12 @@ void Application::main_loop()
 
 void Application::cleanup()
 {
+    if (pipeline_layout_)
+    {
+        vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
+        pipeline_layout_ = nullptr;
+    }
+
     while (!swap_chain_image_views_.empty())
     {
         vkDestroyImageView(device_, swap_chain_image_views_.back(), nullptr);

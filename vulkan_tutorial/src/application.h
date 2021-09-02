@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <filesystem>
 
 #include "integer.h"
 #include "vulkan/vulkan.h"
@@ -23,6 +24,7 @@ public:
     Application& operator=(const Application&) = delete;
     ~Application();
 
+    void set_executable_file(std::filesystem::path path);
     void run();
 
 private:
@@ -31,6 +33,8 @@ private:
     void create_device();
     void create_swap_chain();
     void create_swap_chain_image_views();
+    void create_graphics_pipeline();
+    VkShaderModule create_shader_module(const std::filesystem::path& file, std::vector<ui8>& cache);
     void checkValidationLayerSupport();
     void initialize_vulkan();
     void create_instance();
@@ -47,6 +51,8 @@ private:
     std::vector<VkImageView> swap_chain_image_views_;
     std::vector<const char*> validation_layers_;
     std::vector<const char*> device_extensions_;
+    std::filesystem::path executable_file_;
+    VkPipelineLayout pipeline_layout_ = nullptr;
     VkSwapchainKHR swap_chain_ = nullptr;
     VkSurfaceKHR surface_ = nullptr;
     PhysicalDeviceInfo device_info_;
