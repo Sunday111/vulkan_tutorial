@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <ranges>
 #include <stdexcept>
 #include <string_view>
 

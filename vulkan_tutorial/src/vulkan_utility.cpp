@@ -77,10 +77,10 @@ std::string_view VulkanUtility::serveriity_to_string(VkDebugUtilsMessageSeverity
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT: return "info";
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT: return "warning";
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT: return "error";
+    default:
+        assert(false);
+        return "unknown severity";
     }
-
-    assert(false);
-    return "unknown severity";
 }
 
 std::string_view VulkanUtility::vk_result_to_string(VkResult vk_result) noexcept
@@ -114,10 +114,12 @@ std::string_view VulkanUtility::vk_result_to_string(VkResult vk_result) noexcept
         BCASE(VK_SUBOPTIMAL_KHR);
         BCASE(VK_ERROR_OUT_OF_DATE_KHR);
         BCASE(VK_ERROR_VALIDATION_FAILED_EXT);
+        
+        default:
+            assert(false);
+            return "UNKNOWN ERROR CODE";
     }
 
-    assert(false);
-    return "UNKNOWN ERROR CODE";
 #undef BCASE
 }
 
