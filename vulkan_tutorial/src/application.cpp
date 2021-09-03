@@ -37,7 +37,8 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
 
 Application::Application()
 {
-    glfw_initialized = false;
+    glfw_initialized_ = false;
+    frame_buffer_resized_ = false;
 
 #ifndef NDEBUG
     validation_layers_.push_back("VK_LAYER_KHRONOS_validation");
@@ -67,10 +68,18 @@ void Application::run()
 void Application::initialize_window()
 {
     glfwInit();
-    glfw_initialized = true;
+    glfw_initialized_ = true;
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     window_ = glfwCreateWindow(window_width_, window_height_, "Vulkan", nullptr, nullptr);
+    glfwSetWindowUserPointer(window_, this);
+    glfwSetFramebufferSizeCallback(window_, Application::frame_buffer_resize_callback);
+}
+
+void Application::frame_buffer_resize_callback(GLFWwindow* window, int width, int height)
+{
+    auto app = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
+    app->frame_buffer_resized_ = true;
 }
 
 void populate_debug_messenger_create_info(VkDebugUtilsMessengerCreateInfoEXT& create_info)
@@ -197,6 +206,7 @@ void Application::create_device()
 
 void Application::create_swap_chain()
 {
+    surface_info_.populate(device_info_.device, surface_);
     const VkSurfaceFormatKHR surfaceFormat = choose_surface_format();
     const VkPresentModeKHR presentMode = choose_present_mode();
     swap_chain_extent_ = choose_swap_extent();
@@ -612,6 +622,13 @@ void Application::initialize_vulkan()
 
 void Application::recreate_swap_chain()
 {
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(window_, &width, &height);
+    while (width == 0 || height == 0) {
+        glfwGetFramebufferSize(window_, &width, &height);
+        glfwWaitEvents();
+    }
+
     if (device_)
     {
         vk_expect_success(vkDeviceWaitIdle(device_), "vkDeviceWaitIdle");
@@ -666,6 +683,31 @@ void Application::main_loop()
     }
 }
 
+std::optional<ui32> Application::acquire_next_swap_chain_image() const
+{
+    std::optional<ui32> r;
+
+    ui32 image_index;
+    const VkResult ret_code = vkAcquireNextImageKHR(device_, swap_chain_, UINT64_MAX, image_available_semaphores_[current_frame_], VK_NULL_HANDLE, &image_index);
+
+    switch (ret_code)
+    {
+    case VK_SUCCESS:
+        r = image_index;
+        break;
+
+    case VK_SUBOPTIMAL_KHR:
+    case VK_ERROR_OUT_OF_DATE_KHR:
+        break;
+
+    default:
+        vk_expect_success(ret_code, "vkAcquireNextImageKHR");
+        break;
+    }
+
+    return r;
+}
+
 void Application::draw_frame()
 {
     // first check that nobody does not draw to current frame
@@ -675,9 +717,27 @@ void Application::draw_frame()
 
     // get next image index from the swap chain
     ui32 image_index;
-    vk_expect_success(
-        vkAcquireNextImageKHR(device_, swap_chain_, UINT64_MAX, image_available_semaphores_[current_frame_], VK_NULL_HANDLE, &image_index),
-        "vkAcquireNextImageKHR");
+
+    {
+        const VkResult acquire_result = vkAcquireNextImageKHR(device_, swap_chain_,
+            UINT64_MAX, image_available_semaphores_[current_frame_], VK_NULL_HANDLE, &image_index);
+
+        switch (acquire_result)
+        {
+        case VK_SUCCESS:
+        case VK_SUBOPTIMAL_KHR:
+            break;
+
+        case VK_ERROR_OUT_OF_DATE_KHR:
+            recreate_swap_chain();
+            return;
+            break;
+
+        default:
+            vk_expect_success(acquire_result, "vkAcquireNextImageKHR");
+            break;
+        }
+    }
 
     // Check if a previous frame is using this image (i.e. there is its fence to wait on)
     if (auto fence = images_in_flight_[image_index]; fence != VK_NULL_HANDLE)
@@ -726,9 +786,18 @@ void Application::draw_frame()
     present_info.pImageIndices = &image_index;
     present_info.pResults = nullptr;
 
-    vk_expect_success(
-        vkQueuePresentKHR(present_queue_, &present_info),
-        "vkQueuePresentKHR");
+    {
+        const VkResult present_result = vkQueuePresentKHR(present_queue_, &present_info);
+        if (present_result == VK_ERROR_OUT_OF_DATE_KHR || present_result == VK_SUBOPTIMAL_KHR || frame_buffer_resized_)
+        {
+            frame_buffer_resized_ = false;
+            recreate_swap_chain();
+        }
+        else if (present_result != VK_SUCCESS)
+        {
+            vk_expect_success(present_result, "vkQueuePresentKHR");
+        }
+    }
 
     vkDeviceWaitIdle(device_);
 
@@ -753,10 +822,10 @@ void Application::cleanup()
         window_ = nullptr;
     }
     
-    if (glfw_initialized)
+    if (glfw_initialized_)
     {
         glfwTerminate();
-        glfw_initialized = false;
+        glfw_initialized_ = false;
     }
 }
 

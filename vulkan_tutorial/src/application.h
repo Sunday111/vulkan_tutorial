@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include <filesystem>
+#include <optional>
 
 #include "vulkan/vulkan.h"
 
@@ -48,7 +49,10 @@ private:
     void create_instance();
 
     void initialize_window();
+    static void frame_buffer_resize_callback(GLFWwindow* window, int width, int height);
+
     void main_loop();
+    std::optional<ui32> acquire_next_swap_chain_image() const;
     void draw_frame();
 
     void cleanup();
@@ -89,5 +93,6 @@ private:
     ui32 window_height_ = kDefaultWindowHeight;
     VkFormat swap_chain_image_format_ = {};
     VkExtent2D swap_chain_extent_ = {};
-    ui8 glfw_initialized : 1;
+    ui8 glfw_initialized_ : 1;
+    ui8 frame_buffer_resized_ : 1;
 };
