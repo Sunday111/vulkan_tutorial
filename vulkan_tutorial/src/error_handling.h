@@ -6,6 +6,8 @@
 
 #include "fmt/format.h"
 #include "vulkan/vulkan.h"
+
+#include "macro.h"
 #include "vulkan_utility.h"
 
 template
@@ -42,3 +44,6 @@ void vk_expect_success(VkResult result, const std::string_view& description_form
 {
     vk_expect<Exception>(result, VK_SUCCESS, description_format, std::forward<Args>(args)...);
 }
+
+// wraps vulkan call to throw an exception if function didn't return VK_SUCCESS
+#define vk_wrap(function_name) [](auto&&... args) { vk_expect_success(function_name(args...), TOSTRING(function_name)" at {}", __LINE__); }

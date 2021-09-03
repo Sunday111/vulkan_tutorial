@@ -43,6 +43,7 @@ Application::Application()
 #ifndef NDEBUG
     validation_layers_.push_back("VK_LAYER_KHRONOS_validation");
 #endif
+    validation_layers_.push_back("VK_LAYER_MESA_overlay");
 
     device_extensions_.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 }
@@ -148,6 +149,8 @@ void Application::pick_physical_device()
     {
         throw std::runtime_error("There is no suitable device");
     }
+
+    fmt::print("picked device: {}\n", device_info_.properties.deviceName);
 }
 
 void Application::create_surface()
@@ -184,7 +187,7 @@ void Application::create_buffer(VkDeviceSize size, VkBufferUsageFlags usage,
         "vkAllocateMemory");
 
     vk_expect_success(
-        vkBindBufferMemory(device_, vertex_buffer_, buffer_memory, 0),
+        vkBindBufferMemory(device_, buffer, buffer_memory, 0),
         "vkBindBufferMemory"
     );
 }
@@ -526,31 +529,87 @@ void Application::create_frame_buffers()
     }
 }
 
-void Application::create_command_pool()
+VkCommandPool Application::create_command_pool(ui32 queue_family_index, VkCommandPoolCreateFlags flags) const
 {
     VkCommandPoolCreateInfo pool_info{};
     pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    pool_info.queueFamilyIndex = device_info_.get_graphics_queue_family_index();
-    pool_info.flags = 0; // Optional
+    pool_info.queueFamilyIndex = queue_family_index;
+    pool_info.flags = flags;
 
+    VkCommandPool pool;
     vk_expect_success(
-        vkCreateCommandPool(device_, &pool_info, nullptr, &command_pool_),
-        "vkCreateCommandPool for graphics family at {}", __LINE__);
+        vkCreateCommandPool(device_, &pool_info, nullptr, &pool),
+        "vkCreateCommandPool for family {}", queue_family_index);
+
+    return pool;
+}
+
+void Application::create_command_pools()
+{
+    persistent_command_pool_ = create_command_pool(device_info_.get_graphics_queue_family_index());
+    transient_command_pool_ = create_command_pool(device_info_.get_graphics_queue_family_index(), VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
 }
 
 void Application::create_vertex_buffers()
 {
     const VkDeviceSize buffer_size = sizeof(vertices[0]) * vertices.size();
-    create_buffer(buffer_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+
+    VkBuffer staging_buffer = nullptr;
+    VkDeviceMemory staging_buffer_memory = nullptr;
+    create_buffer(buffer_size,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        vertex_buffer_, vertex_buffer_memory_);
+        staging_buffer, staging_buffer_memory);
 
     void* mapped = nullptr;
     vk_expect_success(
-        vkMapMemory(device_, vertex_buffer_memory_, 0, buffer_size, 0, &mapped),
+        vkMapMemory(device_, staging_buffer_memory, 0, buffer_size, 0, &mapped),
         "vkMapMemory");
     std::copy(vertices.begin(), vertices.end(), (Vertex*)mapped);
-    vkUnmapMemory(device_, vertex_buffer_memory_);
+    vkUnmapMemory(device_, staging_buffer_memory);
+
+    // vertex buffer is device local -
+    // it receives data by copying it from the staging buffer
+    create_buffer(buffer_size,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        vertex_buffer_, vertex_buffer_memory_);
+
+    copy_buffer(staging_buffer, vertex_buffer_, buffer_size);
+
+    VulkanUtility::destroy<vkDestroyBuffer>(device_, staging_buffer);
+    VulkanUtility::free_memory(device_, staging_buffer_memory);
+}
+
+void Application::copy_buffer(VkBuffer src, VkBuffer dst, VkDeviceSize size)
+{
+    VkCommandBufferAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    alloc_info.commandPool = transient_command_pool_;
+    alloc_info.commandBufferCount = 1;
+
+    VkCommandBuffer command_buffer = nullptr;
+    vk_wrap(vkAllocateCommandBuffers)(device_, &alloc_info, &command_buffer);
+
+    VkCommandBufferBeginInfo begin_info{};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vk_wrap(vkBeginCommandBuffer)(command_buffer, &begin_info);
+
+    VkBufferCopy copy_region{};
+    copy_region.size = size;
+    vkCmdCopyBuffer(command_buffer, src, dst, 1, &copy_region);
+
+    vk_wrap(vkEndCommandBuffer)(command_buffer);
+
+    VkSubmitInfo submit_info{};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &command_buffer;
+    vk_wrap(vkQueueSubmit)(graphics_queue_, 1, &submit_info, nullptr);
+    vk_wrap(vkQueueWaitIdle)(graphics_queue_);
+    vkFreeCommandBuffers(device_, transient_command_pool_, 1, &command_buffer);
 }
 
 void Application::create_command_buffers()
@@ -560,7 +619,7 @@ void Application::create_command_buffers()
 
     VkCommandBufferAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.commandPool = command_pool_;
+    allocInfo.commandPool = persistent_command_pool_;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     allocInfo.commandBufferCount = num_buffers;
     vk_expect_success(
@@ -671,7 +730,7 @@ void Application::initialize_vulkan()
     create_render_pass();
     create_graphics_pipeline();
     create_frame_buffers();
-    create_command_pool();
+    create_command_pools();
     create_vertex_buffers();
     create_command_buffers();
     create_sync_objects();
@@ -873,7 +932,8 @@ void Application::cleanup()
     Vk::destroy<vkDestroyFence>(device_, in_flight_fences_);
     Vk::destroy<vkDestroySemaphore>(device_, render_finished_semaphores_);
     Vk::destroy<vkDestroySemaphore>(device_, image_available_semaphores_);
-    Vk::destroy<vkDestroyCommandPool>(device_, command_pool_);
+    Vk::destroy<vkDestroyCommandPool>(device_, persistent_command_pool_);
+    Vk::destroy<vkDestroyCommandPool>(device_, transient_command_pool_);
     Vk::destroy<vkDestroyDevice>(device_);
     Vk::destroy<vkDestroySurfaceKHR>(instance_, surface_);
     Vk::destroy<vkDestroyInstance>(instance_);
@@ -897,7 +957,7 @@ void Application::cleanup_swap_chain()
     Vk::destroy<vkDestroyFramebuffer>(device_, swap_chain_frame_buffers_);
     if (!command_buffers_.empty())
     {
-        vkFreeCommandBuffers(device_, command_pool_, static_cast<uint32_t>(command_buffers_.size()), command_buffers_.data());
+        vkFreeCommandBuffers(device_, persistent_command_pool_, static_cast<uint32_t>(command_buffers_.size()), command_buffers_.data());
         command_buffers_.clear();
     }
     Vk::destroy<vkDestroyPipeline>(device_, graphics_pipeline_);

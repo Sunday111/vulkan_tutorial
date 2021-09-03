@@ -92,7 +92,8 @@ private:
     void create_render_pass();
     void create_graphics_pipeline();
     void create_frame_buffers();
-    void create_command_pool();
+    [[nodiscard]] VkCommandPool create_command_pool(ui32 queue_family_index, VkCommandPoolCreateFlags flags = 0) const;
+    void create_command_pools();
     void create_vertex_buffers();
     void create_command_buffers();
     void create_sync_objects();
@@ -102,6 +103,7 @@ private:
     void create_instance();
     void create_buffer(VkDeviceSize size, VkBufferUsageFlags usage,
         VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& buffer_memory) const;
+    void copy_buffer(VkBuffer src, VkBuffer dst, VkDeviceSize size);
 
     void initialize_window();
     static void frame_buffer_resize_callback(GLFWwindow* window, int width, int height);
@@ -134,7 +136,8 @@ private:
     VkBuffer vertex_buffer_ = nullptr;
     VkQueue graphics_queue_ = nullptr;
     VkQueue present_queue_ = nullptr;
-    VkCommandPool command_pool_ = nullptr;
+    VkCommandPool persistent_command_pool_ = nullptr;
+    VkCommandPool transient_command_pool_ = nullptr;
     VkPipeline graphics_pipeline_ = nullptr;
     VkRenderPass render_pass_ = nullptr;
     VkPipelineLayout pipeline_layout_ = nullptr;
