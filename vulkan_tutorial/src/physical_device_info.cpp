@@ -7,9 +7,11 @@ void PhysicalDeviceInfo::populate(VkPhysicalDevice new_device, VkSurfaceKHR surf
 {
     device = new_device;
     vkGetPhysicalDeviceProperties(device, &properties);
+    vkGetPhysicalDeviceMemoryProperties(device, &memory_properties);
     vkGetPhysicalDeviceFeatures(device, &features);
     VulkanUtility::get_queue_families(device, families_properties);
     VulkanUtility::get_device_extensions(device, extensions);
+
     populate_index_cache(surface);
 }
 
@@ -24,6 +26,33 @@ bool PhysicalDeviceInfo::has_extension(std::string_view name) const noexcept
     }
 
     return false;
+}
+
+std::optional<ui32> PhysicalDeviceInfo::find_memory_type_index(ui32 filter, VkMemoryPropertyFlags properties) const noexcept
+{
+    for(ui32 i = 0; i < memory_properties.memoryTypeCount; ++i)
+    {
+        if((filter & (1 << i)) &&
+            (memory_properties.memoryTypes[i].propertyFlags & properties) == properties)
+        {
+            return i;
+        }
+    }
+
+    return {};
+}
+
+ui32 PhysicalDeviceInfo::get_memory_type_index(ui32 filter, VkMemoryPropertyFlags properties) const
+{
+    std::optional<ui32> index = find_memory_type_index(filter, properties);
+
+    [[likely]]
+    if(index)
+    {
+        return *index;
+    }
+
+    throw std::runtime_error("failed to find memory type index");
 }
 
 void PhysicalDeviceInfo::populate_index_cache(VkSurfaceKHR surface)

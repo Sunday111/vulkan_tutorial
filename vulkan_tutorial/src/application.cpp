@@ -355,12 +355,15 @@ void Application::create_graphics_pipeline()
     frag_shader_stage_create_info.module = fragment_shader_module;
     frag_shader_stage_create_info.pName = "main";
 
+    auto binding_descriptions = StructDescriptor<Vertex>::get_binding_description();
+    auto attribute_descriptions = StructDescriptor<Vertex>::get_input_attribute_descriptions();
+
     VkPipelineVertexInputStateCreateInfo vert_input_info{};
     vert_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vert_input_info.vertexBindingDescriptionCount = 0;
-    vert_input_info.pVertexBindingDescriptions = nullptr; // Optional
-    vert_input_info.vertexAttributeDescriptionCount = 0;
-    vert_input_info.pVertexAttributeDescriptions = nullptr;
+    vert_input_info.vertexBindingDescriptionCount = static_cast<ui32>(binding_descriptions.size());
+    vert_input_info.pVertexBindingDescriptions = binding_descriptions.data();
+    vert_input_info.vertexAttributeDescriptionCount = static_cast<ui32>(attribute_descriptions.size());
+    vert_input_info.pVertexAttributeDescriptions = attribute_descriptions.data();
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly{};
     input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -503,6 +506,46 @@ void Application::create_command_pool()
         "vkCreateCommandPool for graphics family at {}", __LINE__);
 }
 
+void Application::create_vertex_buffers()
+{
+    VkBufferCreateInfo buffer_info{};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.size = sizeof(vertices[0]) * vertices.size();
+    buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    buffer_info.flags = 0;
+
+    vk_expect_success(
+        vkCreateBuffer(device_, &buffer_info, nullptr, &vertex_buffer_),
+        "vkCreateBuffer"
+    );
+
+    VkMemoryRequirements memory_requirements;
+    vkGetBufferMemoryRequirements(device_, vertex_buffer_, &memory_requirements);
+
+    VkMemoryAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.allocationSize = memory_requirements.size;
+    alloc_info.memoryTypeIndex = device_info_.get_memory_type_index(memory_requirements.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    
+    vk_expect_success(
+        vkAllocateMemory(device_, &alloc_info, nullptr, &vertex_buffer_memory_),
+        "vkAllocateMemory");
+
+    vk_expect_success(
+        vkBindBufferMemory(device_, vertex_buffer_, vertex_buffer_memory_, 0),
+        "vkBindBufferMemory"
+    );
+
+    void* mapped = nullptr;
+    vk_expect_success(
+        vkMapMemory(device_, vertex_buffer_memory_, 0, buffer_info.size, 0, &mapped),
+        "vkMapMemory");
+    std::copy(vertices.begin(), vertices.end(), (Vertex*)mapped);
+    vkUnmapMemory(device_, vertex_buffer_memory_);
+}
+
 void Application::create_command_buffers()
 {
     ui32 num_buffers = static_cast<ui32>(swap_chain_frame_buffers_.size());
@@ -544,7 +587,12 @@ void Application::create_command_buffers()
         vkCmdBeginRenderPass(command_buffer, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline_);
 
-        ui32 num_vertices = 3;
+        std::array vertex_buffers { vertex_buffer_ };
+        const ui32 num_vertex_buffers = static_cast<ui32>(vertex_buffers.size());
+        std::array offsets { VkDeviceSize(0) };
+        vkCmdBindVertexBuffers(command_buffer, 0, num_vertex_buffers, vertex_buffers.data(), offsets.data());
+        
+        ui32 num_vertices = static_cast<ui32>(vertices.size());
         ui32 num_instances = 1;
         ui32 first_vertex = 0;
         ui32 first_instance = 0;
@@ -617,6 +665,7 @@ void Application::initialize_vulkan()
     create_graphics_pipeline();
     create_frame_buffers();
     create_command_pool();
+    create_vertex_buffers();
     create_command_buffers();
     create_sync_objects();
 }
@@ -810,6 +859,10 @@ void Application::cleanup()
 {
     using Vk = VulkanUtility;
     cleanup_swap_chain();
+
+    Vk::destroy<vkDestroyBuffer>(device_, vertex_buffer_);
+    Vk::free_memory(device_, vertex_buffer_memory_);
+
     Vk::destroy<vkDestroyFence>(device_, in_flight_fences_);
     Vk::destroy<vkDestroySemaphore>(device_, render_finished_semaphores_);
     Vk::destroy<vkDestroySemaphore>(device_, image_available_semaphores_);

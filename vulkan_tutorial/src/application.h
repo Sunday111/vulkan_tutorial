@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <string>
 #include <vector>
 #include <memory>
@@ -11,6 +12,57 @@
 #include "integer.h"
 #include "physical_device_info.h"
 #include "device_surface_info.h"
+
+#include "glm/glm.hpp"
+
+template<typename T>
+struct StructDescriptor
+{
+};
+
+struct Vertex
+{
+    glm::vec2 pos;
+    glm::vec3 color;
+};
+
+template<>
+struct StructDescriptor<Vertex>
+{
+    [[nodiscard]] static constexpr std::array<VkVertexInputBindingDescription, 1> get_binding_description() noexcept
+    {
+        VkVertexInputBindingDescription binding_description{};
+
+        binding_description.binding = 0;
+        binding_description.stride = sizeof(Vertex);
+        binding_description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+        return std::array{ binding_description };
+    }
+
+    [[nodiscard]] static constexpr std::array<VkVertexInputAttributeDescription, 2> get_input_attribute_descriptions() noexcept
+    {
+        VkVertexInputAttributeDescription d0{};
+        d0.binding = 0;
+        d0.location = 0;
+        d0.format = VK_FORMAT_R32G32_SFLOAT;
+        d0.offset = offsetof(Vertex, pos);
+
+        VkVertexInputAttributeDescription d1{};
+        d1.binding = 0;
+        d1.location = 1;
+        d1.format = VK_FORMAT_R32G32B32_SFLOAT;
+        d1.offset = offsetof(Vertex, color);
+
+        return std::array{d0, d1};
+    }
+};
+
+const std::vector<Vertex> vertices = {
+    {{ 0.0f, -0.5f}, { 1.0f, 0.0f, 1.0f}},
+    {{ 0.5f,  0.5f}, { 0.0f, 1.0f, 0.0f}},
+    {{-0.5f,  0.5f}, { 0.0f, 0.0f, 1.0f}}
+};
 
 struct GLFWwindow;
 
@@ -41,6 +93,7 @@ private:
     void create_graphics_pipeline();
     void create_frame_buffers();
     void create_command_pool();
+    void create_vertex_buffers();
     void create_command_buffers();
     void create_sync_objects();
     VkShaderModule create_shader_module(const std::filesystem::path& file, std::vector<char>& cache);
@@ -75,6 +128,8 @@ private:
     std::vector<VkFence> in_flight_fences_; // indexed by current frame
     std::vector<VkFence> images_in_flight_; // indexed by image index
     std::filesystem::path executable_file_;
+    VkDeviceMemory vertex_buffer_memory_ = nullptr;
+    VkBuffer vertex_buffer_ = nullptr;
     VkQueue graphics_queue_ = nullptr;
     VkQueue present_queue_ = nullptr;
     VkCommandPool command_pool_ = nullptr;

@@ -48,4 +48,6 @@ public:
             handles.pop_back();
         }
     }
+
+    static void free_memory(VkDevice device, VkDeviceMemory& memory, const VkAllocationCallbacks* allocation_callbacks = nullptr) noexcept;
 };

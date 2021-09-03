@@ -124,3 +124,12 @@ std::string_view VulkanUtility::vk_result_to_string(VkResult vk_result) noexcept
 }
 
 #undef VK_GET_ARRAY
+
+void VulkanUtility::free_memory(VkDevice device, VkDeviceMemory& memory, const VkAllocationCallbacks* allocation_callbacks) noexcept
+{
+    if(memory)
+    {
+        vkFreeMemory(device, memory, allocation_callbacks);
+        memory = nullptr;
+    }
+}
