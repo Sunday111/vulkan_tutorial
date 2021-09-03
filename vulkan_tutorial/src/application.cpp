@@ -15,14 +15,6 @@
 #include "read_file.h"
 #include "fmt/format.h"
 
-void destroy_debug_messenger(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) {
-    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
-    if (func)
-    {
-        func(instance, debugMessenger, pAllocator);
-    }
-}
-
 static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT severity,
     VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -43,9 +35,9 @@ Application::Application()
     frame_buffer_resized_ = false;
 
 #ifndef NDEBUG
-    validation_layers_.push_back("VK_LAYER_KHRONOS_validation");
+    required_layers_.push_back("VK_LAYER_KHRONOS_validation");
 #endif
-    validation_layers_.push_back("VK_LAYER_MESA_overlay");
+    required_layers_.push_back("VK_LAYER_MESA_overlay");
 
     device_extensions_.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 }
@@ -107,6 +99,9 @@ void Application::pick_physical_device()
         throw std::runtime_error("There is no vulkan capable devices");
     }
 
+    device_info_ = std::make_unique<PhysicalDeviceInfo>();
+    surface_info_ = std::make_unique<DeviceSurfaceInfo>();
+
     int best_score = -1;
     for(size_t i = 0; i < devices.size(); ++i)
     {
@@ -141,8 +136,8 @@ void Application::pick_physical_device()
         if (score > best_score)
         {
             best_score = score;
-            device_info_ = std::move(device_info);
-            surface_info_ = std::move(surface_info);
+            *device_info_ = std::move(device_info);
+            *surface_info_ = std::move(surface_info);
         }
     }
 
@@ -152,7 +147,7 @@ void Application::pick_physical_device()
         throw std::runtime_error("There is no suitable device");
     }
 
-    fmt::print("picked device: {}\n", device_info_.properties.deviceName);
+    fmt::print("picked device: {}\n", device_info_->properties.deviceName);
 }
 
 void Application::create_surface()
@@ -178,7 +173,7 @@ void Application::create_buffer(VkDeviceSize size, VkBufferUsageFlags usage,
     VkMemoryAllocateInfo alloc_info{};
     alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     alloc_info.allocationSize = memory_requirements.size;
-    alloc_info.memoryTypeIndex = device_info_.get_memory_type_index(memory_requirements.memoryTypeBits, properties);
+    alloc_info.memoryTypeIndex = device_info_->get_memory_type_index(memory_requirements.memoryTypeBits, properties);
     
     vk_wrap(vkAllocateMemory)(device_, &alloc_info, nullptr, &buffer_memory);
     vk_wrap(vkBindBufferMemory)(device_, buffer, buffer_memory, 0);
@@ -204,8 +199,8 @@ void Application::create_device()
         }
     };
 
-    add_queue_family(device_info_.get_graphics_queue_family_index());
-    add_queue_family(device_info_.get_present_queue_family_index());
+    add_queue_family(device_info_->get_graphics_queue_family_index());
+    add_queue_family(device_info_->get_present_queue_family_index());
 
     VkPhysicalDeviceFeatures device_features{};
 
@@ -214,7 +209,6 @@ void Application::create_device()
     device_create_info.pQueueCreateInfos = queue_create_infos.data();
     device_create_info.queueCreateInfoCount = static_cast<ui32>(queue_create_infos.size());
     device_create_info.pEnabledFeatures = &device_features;
-    device_create_info.enabledExtensionCount = 0;
     device_create_info.enabledLayerCount = 0; // need to specify them in instance only
     device_create_info.enabledExtensionCount = static_cast<ui32>(device_extensions_.size());
     if (!device_extensions_.empty())
@@ -223,25 +217,25 @@ void Application::create_device()
     }
 
     VkDevice logical_device;
-    vk_wrap(vkCreateDevice)(device_info_.device, &device_create_info, nullptr, &logical_device);
+    vk_wrap(vkCreateDevice)(device_info_->device, &device_create_info, nullptr, &logical_device);
 
     device_ = logical_device;
-    vkGetDeviceQueue(device_, device_info_.get_graphics_queue_family_index(), 0, &graphics_queue_);
-    vkGetDeviceQueue(device_, device_info_.get_present_queue_family_index(), 0, &present_queue_);
+    vkGetDeviceQueue(device_, device_info_->get_graphics_queue_family_index(), 0, &graphics_queue_);
+    vkGetDeviceQueue(device_, device_info_->get_present_queue_family_index(), 0, &present_queue_);
 }
 
 void Application::create_swap_chain()
 {
-    surface_info_.populate(device_info_.device, surface_);
+    surface_info_->populate(device_info_->device, surface_);
     const VkSurfaceFormatKHR surfaceFormat = choose_surface_format();
     const VkPresentModeKHR presentMode = choose_present_mode();
     swap_chain_extent_ = choose_swap_extent();
     
-    ui32 image_count = surface_info_.capabilities.minImageCount + 1;
-    if (surface_info_.capabilities.maxImageCount > 0 &&
-        image_count > surface_info_.capabilities.maxImageCount)
+    ui32 image_count = surface_info_->capabilities.minImageCount + 1;
+    if (surface_info_->capabilities.maxImageCount > 0 &&
+        image_count > surface_info_->capabilities.maxImageCount)
     {
-        image_count = surface_info_.capabilities.maxImageCount;
+        image_count = surface_info_->capabilities.maxImageCount;
     }
 
     VkSwapchainCreateInfoKHR createInfo{};
@@ -256,8 +250,8 @@ void Application::create_swap_chain()
 
     std::array queueFamilyIndices =
     {
-        device_info_.get_graphics_queue_family_index(),
-        device_info_.get_present_queue_family_index()
+        device_info_->get_graphics_queue_family_index(),
+        device_info_->get_present_queue_family_index()
     };
 
     if (queueFamilyIndices[0] != queueFamilyIndices[1])
@@ -273,7 +267,7 @@ void Application::create_swap_chain()
         createInfo.pQueueFamilyIndices = nullptr; // Optional
     }
 
-    createInfo.preTransform = surface_info_.capabilities.currentTransform;
+    createInfo.preTransform = surface_info_->capabilities.currentTransform;
     createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     createInfo.presentMode = presentMode;
     createInfo.clipped = VK_TRUE;
@@ -520,8 +514,8 @@ VkCommandPool Application::create_command_pool(ui32 queue_family_index, VkComman
 
 void Application::create_command_pools()
 {
-    persistent_command_pool_ = create_command_pool(device_info_.get_graphics_queue_family_index());
-    transient_command_pool_ = create_command_pool(device_info_.get_graphics_queue_family_index(), VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
+    persistent_command_pool_ = create_command_pool(device_info_->get_graphics_queue_family_index());
+    transient_command_pool_ = create_command_pool(device_info_->get_graphics_queue_family_index(), VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
 }
 
 void Application::create_vertex_buffers()
@@ -631,9 +625,9 @@ VkShaderModule Application::create_shader_module(const std::filesystem::path& fi
     return shader_module;
 }
 
-void Application::checkValidationLayerSupport()
+void Application::check_required_layers_support()
 {
-    if (validation_layers_.empty())
+    if (required_layers_.empty())
     {
         return;
     }
@@ -644,7 +638,7 @@ void Application::checkValidationLayerSupport()
     std::vector<VkLayerProperties> availableLayers(layer_count);
     vk_wrap(vkEnumerateInstanceLayerProperties)(&layer_count, availableLayers.data());
 
-    for (const auto& layer_name : validation_layers_)
+    for (const auto& layer_name : required_layers_)
     {
         std::string_view name_view(layer_name);
         const auto it = std::find_if(availableLayers.begin(), availableLayers.end(), [&](const VkLayerProperties& layer_properties)
@@ -704,7 +698,7 @@ void Application::recreate_swap_chain()
 
 void Application::create_instance()
 {
-    checkValidationLayerSupport();
+    check_required_layers_support();
 
     VkApplicationInfo app_info{};
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -721,12 +715,12 @@ void Application::create_instance()
     create_info.pApplicationInfo = &app_info;
     create_info.enabledExtensionCount = static_cast<ui32>(required_extensions.size());
     create_info.ppEnabledExtensionNames = required_extensions.data();
-    create_info.enabledLayerCount = static_cast<ui32>(validation_layers_.size());
+    create_info.enabledLayerCount = static_cast<ui32>(required_layers_.size());
 
     VkDebugUtilsMessengerCreateInfoEXT create_messenger_info{};
     if (create_info.enabledLayerCount > 0)
     {
-        create_info.ppEnabledLayerNames = validation_layers_.data();
+        create_info.ppEnabledLayerNames = required_layers_.data();
         populate_debug_messenger_create_info(create_messenger_info);
         create_info.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&create_messenger_info;
     }
@@ -741,31 +735,6 @@ void Application::main_loop()
         glfwPollEvents();
         draw_frame();
     }
-}
-
-std::optional<ui32> Application::acquire_next_swap_chain_image() const
-{
-    std::optional<ui32> r;
-
-    ui32 image_index;
-    const VkResult ret_code = vkAcquireNextImageKHR(device_, swap_chain_, UINT64_MAX, image_available_semaphores_[current_frame_], VK_NULL_HANDLE, &image_index);
-
-    switch (ret_code)
-    {
-    case VK_SUCCESS:
-        r = image_index;
-        break;
-
-    case VK_SUBOPTIMAL_KHR:
-    case VK_ERROR_OUT_OF_DATE_KHR:
-        break;
-
-    default:
-        vk_throw(vkAcquireNextImageKHR, ret_code);
-        break;
-    }
-
-    return r;
 }
 
 void Application::draw_frame()
@@ -911,7 +880,7 @@ VkSurfaceFormatKHR Application::choose_surface_format() const
         VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
     };
 
-    return surface_info_.choose_surface_format(preferred_format);
+    return surface_info_->choose_surface_format(preferred_format);
 }
 
 VkPresentModeKHR Application::choose_present_mode() const
@@ -926,7 +895,7 @@ VkPresentModeKHR Application::choose_present_mode() const
 
     size_t best_index = 0;
     int best_score = -1;
-    auto& modes = surface_info_.present_modes;
+    auto& modes = surface_info_->present_modes;
     for (size_t i = 0; i < modes.size(); ++i)
     {
         auto it = std::find(priority.begin(), priority.end(), modes[i]);
@@ -941,7 +910,7 @@ VkPresentModeKHR Application::choose_present_mode() const
         }
     }
 
-    return surface_info_.present_modes[best_index];
+    return surface_info_->present_modes[best_index];
 }
 
 std::filesystem::path Application::get_shaders_dir() const noexcept
@@ -980,7 +949,7 @@ void Application::create_gpu_buffer_raw(const void* data, VkDeviceSize buffer_si
 
 VkExtent2D Application::choose_swap_extent() const
 {
-    auto& capabilities = surface_info_.capabilities;
+    auto& capabilities = surface_info_->capabilities;
 
     if (capabilities.currentExtent.width != UINT32_MAX)
     {

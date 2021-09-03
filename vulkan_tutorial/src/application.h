@@ -106,7 +106,7 @@ private:
     void create_command_buffers();
     void create_sync_objects();
     VkShaderModule create_shader_module(const std::filesystem::path& file, std::vector<char>& cache);
-    void checkValidationLayerSupport();
+    void check_required_layers_support();
     void initialize_vulkan();
     void create_instance();
     void create_buffer(VkDeviceSize size, VkBufferUsageFlags usage,
@@ -140,9 +140,10 @@ private:
     }
 
 private:
+    std::filesystem::path executable_file_;
     std::vector<VkImage> swap_chain_images_;
     std::vector<VkImageView> swap_chain_image_views_;
-    std::vector<const char*> validation_layers_;
+    std::vector<const char*> required_layers_;
     std::vector<const char*> device_extensions_;
     std::vector<VkFramebuffer> swap_chain_frame_buffers_;
     std::vector<VkCommandBuffer> command_buffers_;
@@ -150,7 +151,8 @@ private:
     std::vector<VkSemaphore> render_finished_semaphores_;
     std::vector<VkFence> in_flight_fences_; // indexed by current frame
     std::vector<VkFence> images_in_flight_; // indexed by image index
-    std::filesystem::path executable_file_;
+    std::unique_ptr<DeviceSurfaceInfo> surface_info_;
+    std::unique_ptr<PhysicalDeviceInfo> device_info_;
     VkDeviceMemory vertex_buffer_memory_ = nullptr;
     VkBuffer vertex_buffer_ = nullptr;
     VkDeviceMemory index_buffer_memory_ = nullptr;
@@ -164,16 +166,14 @@ private:
     VkPipelineLayout pipeline_layout_ = nullptr;
     VkSwapchainKHR swap_chain_ = nullptr;
     VkSurfaceKHR surface_ = nullptr;
-    PhysicalDeviceInfo device_info_;
-    DeviceSurfaceInfo surface_info_;
     VkDevice device_ = nullptr;
     GLFWwindow* window_ = nullptr;
     VkInstance instance_ = nullptr;
     size_t current_frame_ = 0;
+    VkExtent2D swap_chain_extent_ = {};
     ui32 window_width_ = kDefaultWindowWidth;
     ui32 window_height_ = kDefaultWindowHeight;
     VkFormat swap_chain_image_format_ = {};
-    VkExtent2D swap_chain_extent_ = {};
     ui8 glfw_initialized_ : 1;
     ui8 frame_buffer_resized_ : 1;
 };

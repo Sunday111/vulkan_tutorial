@@ -43,6 +43,25 @@
         "tuple": "cpp",
         "typeinfo": "cpp",
         "utility": "cpp",
-        "span": "cpp"
+        "span": "cpp",
+        "format": "cpp",
+        "any": "cpp",
+        "atomic": "cpp",
+        "compare": "cpp",
+        "complex": "cpp",
+        "concepts": "cpp",
+        "list": "cpp",
+        "map": "cpp",
+        "set": "cpp",
+        "algorithm": "cpp",
+        "iterator": "cpp",
+        "memory_resource": "cpp",
+        "numeric": "cpp",
+        "random": "cpp",
+        "iostream": "cpp",
+        "ranges": "cpp",
+        "cinttypes": "cpp",
+        "typeindex": "cpp",
+        "variant": "cpp"
     }
 }
