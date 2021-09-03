@@ -17,6 +17,7 @@ public:
     static void get_device_surface_formats(VkPhysicalDevice device, VkSurfaceKHR surface, std::vector<VkSurfaceFormatKHR>& out_formats);
     static void get_device_surface_present_modes(VkPhysicalDevice device, VkSurfaceKHR surface, std::vector<VkPresentModeKHR>& out_modes);
     static void get_swap_chain_images(VkDevice device, VkSwapchainKHR swap_chain, std::vector<VkImage>& out_images);
+    static void get_instance_layer_propertoes(std::vector<VkLayerProperties>& out_properties);
     [[nodiscard]] static std::string_view serveriity_to_string(VkDebugUtilsMessageSeverityFlagBitsEXT severity);
 
     template<auto fn, typename Handle>

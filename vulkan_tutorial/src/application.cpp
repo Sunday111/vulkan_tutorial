@@ -155,9 +155,7 @@ void Application::pick_physical_device()
 
 void Application::create_surface()
 {
-    vk_expect_success(
-        glfwCreateWindowSurface(instance_, window_, nullptr, &surface_),
-        "glfwCreateWindowSurface");
+    vk_wrap(glfwCreateWindowSurface)(instance_, window_, nullptr, &surface_);
 }
 
 
@@ -170,9 +168,7 @@ void Application::create_buffer(VkDeviceSize size, VkBufferUsageFlags usage,
     buffer_info.usage = usage;
     buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    vk_expect_success(
-        vkCreateBuffer(device_, &buffer_info, nullptr, &buffer),
-        "vkCreateBuffer");
+    vk_wrap(vkCreateBuffer)(device_, &buffer_info, nullptr, &buffer);
 
     VkMemoryRequirements memory_requirements;
     vkGetBufferMemoryRequirements(device_, buffer, &memory_requirements);
@@ -182,14 +178,8 @@ void Application::create_buffer(VkDeviceSize size, VkBufferUsageFlags usage,
     alloc_info.allocationSize = memory_requirements.size;
     alloc_info.memoryTypeIndex = device_info_.get_memory_type_index(memory_requirements.memoryTypeBits, properties);
     
-    vk_expect_success(
-        vkAllocateMemory(device_, &alloc_info, nullptr, &buffer_memory),
-        "vkAllocateMemory");
-
-    vk_expect_success(
-        vkBindBufferMemory(device_, buffer, buffer_memory, 0),
-        "vkBindBufferMemory"
-    );
+    vk_wrap(vkAllocateMemory)(device_, &alloc_info, nullptr, &buffer_memory);
+    vk_wrap(vkBindBufferMemory)(device_, buffer, buffer_memory, 0);
 }
 
 void Application::create_device()
@@ -231,9 +221,7 @@ void Application::create_device()
     }
 
     VkDevice logical_device;
-    vk_expect_success(
-        vkCreateDevice(device_info_.device, &device_create_info, nullptr, &logical_device),
-        "vkCreateDevice - create logical device for {}", device_info_.properties.deviceName);
+    vk_wrap(vkCreateDevice)(device_info_.device, &device_create_info, nullptr, &logical_device);
 
     device_ = logical_device;
     vkGetDeviceQueue(device_, device_info_.get_graphics_queue_family_index(), 0, &graphics_queue_);
@@ -289,9 +277,7 @@ void Application::create_swap_chain()
     createInfo.clipped = VK_TRUE;
     createInfo.oldSwapchain = VK_NULL_HANDLE;
 
-    vk_expect_success(
-        vkCreateSwapchainKHR(device_, &createInfo, nullptr, &swap_chain_),
-        "vkCreateSwapchainKHR");
+    vk_wrap(vkCreateSwapchainKHR)(device_, &createInfo, nullptr, &swap_chain_);
 
     VulkanUtility::get_swap_chain_images(device_, swap_chain_, swap_chain_images_);
     swap_chain_image_format_ = surfaceFormat.format;
@@ -321,9 +307,7 @@ void Application::create_swap_chain_image_views()
         createInfo.subresourceRange.baseArrayLayer = 0;
         createInfo.subresourceRange.layerCount = 1;
 
-        vk_expect_success(
-            vkCreateImageView(device_, &createInfo, nullptr, &image_view),
-            "vkCreateImageView");
+        vk_wrap(vkCreateImageView)(device_, &createInfo, nullptr, &image_view);
     }
 }
 
@@ -365,9 +349,7 @@ void Application::create_render_pass()
     render_pass_create_info.dependencyCount = 1;
     render_pass_create_info.pDependencies = &dependency;
 
-    vk_expect_success(
-        vkCreateRenderPass(device_, &render_pass_create_info, nullptr, &render_pass_),
-        "vkCreateRenderPass");
+    vk_wrap(vkCreateRenderPass)(device_, &render_pass_create_info, nullptr, &render_pass_);
 }
 
 void Application::create_graphics_pipeline()
@@ -473,10 +455,7 @@ void Application::create_graphics_pipeline()
     pipline_layout_info.pSetLayouts = nullptr; // Optional
     pipline_layout_info.pushConstantRangeCount = 0; // Optional
     pipline_layout_info.pPushConstantRanges = nullptr; // Optional
-
-    vk_expect_success(
-        vkCreatePipelineLayout(device_, &pipline_layout_info, nullptr, &pipeline_layout_),
-        "vkCreatePipelineLayout at {}", __LINE__);
+    vk_wrap(vkCreatePipelineLayout)(device_, &pipline_layout_info, nullptr, &pipeline_layout_);
 
     std::array shader_stages{ vert_shader_stage_create_info, frag_shader_stage_create_info };
     VkGraphicsPipelineCreateInfo pipeline_info{};
@@ -497,9 +476,7 @@ void Application::create_graphics_pipeline()
     pipeline_info.basePipelineHandle = VK_NULL_HANDLE; // Optional
     pipeline_info.basePipelineIndex = -1; // Optional
 
-    vk_expect_success(
-        vkCreateGraphicsPipelines(device_, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &graphics_pipeline_),
-        "vkCreateGraphicsPipelines at {}", __LINE__);
+    vk_wrap(vkCreateGraphicsPipelines)(device_, nullptr, 1, &pipeline_info, nullptr, &graphics_pipeline_);
 
     VulkanUtility::destroy<vkDestroyShaderModule>(device_, vert_shader_module);
     VulkanUtility::destroy<vkDestroyShaderModule>(device_, fragment_shader_module);
@@ -523,9 +500,7 @@ void Application::create_frame_buffers()
         frame_buffer_info.height = swap_chain_extent_.height;
         frame_buffer_info.layers = 1;
 
-        vk_expect_success(
-            vkCreateFramebuffer(device_, &frame_buffer_info, nullptr, &swap_chain_frame_buffers_[index]),
-            "vkCreateFramebuffer [{}/{}] at {}", index, num_images, __LINE__);
+        vk_wrap(vkCreateFramebuffer)(device_, &frame_buffer_info, nullptr, &swap_chain_frame_buffers_[index]);
     }
 }
 
@@ -537,10 +512,7 @@ VkCommandPool Application::create_command_pool(ui32 queue_family_index, VkComman
     pool_info.flags = flags;
 
     VkCommandPool pool;
-    vk_expect_success(
-        vkCreateCommandPool(device_, &pool_info, nullptr, &pool),
-        "vkCreateCommandPool for family {}", queue_family_index);
-
+    vk_wrap(vkCreateCommandPool)(device_, &pool_info, nullptr, &pool);
     return pool;
 }
 
@@ -552,33 +524,12 @@ void Application::create_command_pools()
 
 void Application::create_vertex_buffers()
 {
-    const VkDeviceSize buffer_size = sizeof(vertices[0]) * vertices.size();
+    create_gpu_buffer(std::span(vertices), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, vertex_buffer_, vertex_buffer_memory_);
+}
 
-    VkBuffer staging_buffer = nullptr;
-    VkDeviceMemory staging_buffer_memory = nullptr;
-    create_buffer(buffer_size,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        staging_buffer, staging_buffer_memory);
-
-    void* mapped = nullptr;
-    vk_expect_success(
-        vkMapMemory(device_, staging_buffer_memory, 0, buffer_size, 0, &mapped),
-        "vkMapMemory");
-    std::copy(vertices.begin(), vertices.end(), (Vertex*)mapped);
-    vkUnmapMemory(device_, staging_buffer_memory);
-
-    // vertex buffer is device local -
-    // it receives data by copying it from the staging buffer
-    create_buffer(buffer_size,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        vertex_buffer_, vertex_buffer_memory_);
-
-    copy_buffer(staging_buffer, vertex_buffer_, buffer_size);
-
-    VulkanUtility::destroy<vkDestroyBuffer>(device_, staging_buffer);
-    VulkanUtility::free_memory(device_, staging_buffer_memory);
+void Application::create_index_buffers()
+{
+    create_gpu_buffer(std::span(indices), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, index_buffer_, index_buffer_memory_);
 }
 
 void Application::copy_buffer(VkBuffer src, VkBuffer dst, VkDeviceSize size)
@@ -622,9 +573,7 @@ void Application::create_command_buffers()
     allocInfo.commandPool = persistent_command_pool_;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     allocInfo.commandBufferCount = num_buffers;
-    vk_expect_success(
-        vkAllocateCommandBuffers(device_, &allocInfo, command_buffers_.data()),
-        "vkAllocateCommandBuffers {} buffers", num_buffers);
+    vk_wrap(vkAllocateCommandBuffers)(device_, &allocInfo, command_buffers_.data());
 
     for (ui32 i = 0; i != num_buffers; ++i)
     {
@@ -635,9 +584,7 @@ void Application::create_command_buffers()
         beginInfo.flags = 0; // Optional
         beginInfo.pInheritanceInfo = nullptr; // Optional
 
-        vk_expect_success(
-            vkBeginCommandBuffer(command_buffer, &beginInfo),
-            "vkBeginCommandBuffer {}", i);
+        vk_wrap(vkBeginCommandBuffer)(command_buffer, &beginInfo);
 
         VkRenderPassBeginInfo render_pass_info{};
         render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -657,17 +604,14 @@ void Application::create_command_buffers()
         const ui32 num_vertex_buffers = static_cast<ui32>(vertex_buffers.size());
         std::array offsets { VkDeviceSize(0) };
         vkCmdBindVertexBuffers(command_buffer, 0, num_vertex_buffers, vertex_buffers.data(), offsets.data());
+        vkCmdBindIndexBuffer(command_buffer, index_buffer_, 0, VK_INDEX_TYPE_UINT16);
         
-        ui32 num_vertices = static_cast<ui32>(vertices.size());
         ui32 num_instances = 1;
-        ui32 first_vertex = 0;
-        ui32 first_instance = 0;
-        vkCmdDraw(command_buffer, num_vertices, num_instances, first_vertex, first_instance);
+        const ui32 num_indices = static_cast<ui32>(indices.size());
+        vkCmdDrawIndexed(command_buffer, num_indices, num_instances, 0, 0, 0);
         vkCmdEndRenderPass(command_buffer);
 
-        vk_expect_success(
-            vkEndCommandBuffer(command_buffer),
-            "vkEndCommandBuffer {}", i);
+        vk_wrap(vkEndCommandBuffer)(command_buffer);
     }
 }
 
@@ -680,9 +624,7 @@ VkShaderModule Application::create_shader_module(const std::filesystem::path& fi
     create_info.codeSize = shader_code.size();
     create_info.pCode = reinterpret_cast<const uint32_t*>(shader_code.data());
     VkShaderModule shader_module;
-    vk_expect_success(
-        vkCreateShaderModule(device_, &create_info, nullptr, &shader_module),
-        "vkCreateShaderModule");
+    vk_wrap(vkCreateShaderModule)(device_, &create_info, nullptr, &shader_module);
 
     return shader_module;
 }
@@ -695,12 +637,10 @@ void Application::checkValidationLayerSupport()
     }
 
     ui32 layer_count;
-    vk_expect_success(vkEnumerateInstanceLayerProperties(&layer_count, nullptr),
-        "vkEnumerateInstanceLayerProperties: get validation layers count");
+    vk_wrap(vkEnumerateInstanceLayerProperties)(&layer_count, nullptr);
 
     std::vector<VkLayerProperties> availableLayers(layer_count);
-    vk_expect_success(vkEnumerateInstanceLayerProperties(&layer_count, availableLayers.data()),
-        "vkEnumerateInstanceLayerProperties: get validation layers info");
+    vk_wrap(vkEnumerateInstanceLayerProperties)(&layer_count, availableLayers.data());
 
     for (const auto& layer_name : validation_layers_)
     {
@@ -732,6 +672,7 @@ void Application::initialize_vulkan()
     create_frame_buffers();
     create_command_pools();
     create_vertex_buffers();
+    create_index_buffers();
     create_command_buffers();
     create_sync_objects();
 }
@@ -747,7 +688,7 @@ void Application::recreate_swap_chain()
 
     if (device_)
     {
-        vk_expect_success(vkDeviceWaitIdle(device_), "vkDeviceWaitIdle");
+        vk_wrap(vkDeviceWaitIdle)(device_);
     }
 
     cleanup_swap_chain();
@@ -788,7 +729,7 @@ void Application::create_instance()
         create_info.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&create_messenger_info;
     }
 
-    vk_expect_success(vkCreateInstance(&create_info, nullptr, &instance_), "vkCreateInstance");
+    vk_wrap(vkCreateInstance)(&create_info, nullptr, &instance_);
 }
 
 void Application::main_loop()
@@ -818,7 +759,7 @@ std::optional<ui32> Application::acquire_next_swap_chain_image() const
         break;
 
     default:
-        vk_expect_success(ret_code, "vkAcquireNextImageKHR");
+        throw std::runtime_error("vkAcquireNextImageKHR failed");
         break;
     }
 
@@ -828,9 +769,7 @@ std::optional<ui32> Application::acquire_next_swap_chain_image() const
 void Application::draw_frame()
 {
     // first check that nobody does not draw to current frame
-    vk_expect_success(
-        vkWaitForFences(device_, 1, &in_flight_fences_[current_frame_], VK_TRUE, UINT64_MAX),
-        "vkWaitForFences");
+    vk_wrap(vkWaitForFences)(device_, 1, &in_flight_fences_[current_frame_], VK_TRUE, UINT64_MAX);
 
     // get next image index from the swap chain
     ui32 image_index;
@@ -851,7 +790,7 @@ void Application::draw_frame()
             break;
 
         default:
-            vk_expect_success(acquire_result, "vkAcquireNextImageKHR");
+            throw std::runtime_error("vkAcquireNextImageKHR failed");
             break;
         }
     }
@@ -859,9 +798,7 @@ void Application::draw_frame()
     // Check if a previous frame is using this image (i.e. there is its fence to wait on)
     if (auto fence = images_in_flight_[image_index]; fence != VK_NULL_HANDLE)
     {
-        vk_expect_success(
-            vkWaitForFences(device_, 1, &fence, VK_TRUE, UINT64_MAX),
-            "vkWaitForFences");
+        vk_wrap(vkWaitForFences)(device_, 1, &fence, VK_TRUE, UINT64_MAX);
     }
 
     // Mark the image as now being in use by this frame
@@ -886,13 +823,8 @@ void Application::draw_frame()
     submit_info.signalSemaphoreCount = num_signal_semaphores;
     submit_info.pSignalSemaphores = signal_semaphores.data();
 
-    vk_expect_success(
-        vkResetFences(device_, 1, &in_flight_fences_[current_frame_]),
-        "vkResetFences");
-
-    vk_expect_success(
-        vkQueueSubmit(graphics_queue_, 1, &submit_info, in_flight_fences_[current_frame_]),
-        "vkQueueSubmit");
+    vk_wrap(vkResetFences)(device_, 1, &in_flight_fences_[current_frame_]);
+    vk_wrap(vkQueueSubmit)(graphics_queue_, 1, &submit_info, in_flight_fences_[current_frame_]);
 
     VkPresentInfoKHR present_info{};
     present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -912,7 +844,7 @@ void Application::draw_frame()
         }
         else if (present_result != VK_SUCCESS)
         {
-            vk_expect_success(present_result, "vkQueuePresentKHR");
+            throw std::runtime_error("vkQueuePresentKHR failed");
         }
     }
 
@@ -928,6 +860,9 @@ void Application::cleanup()
 
     Vk::destroy<vkDestroyBuffer>(device_, vertex_buffer_);
     Vk::free_memory(device_, vertex_buffer_memory_);
+
+    Vk::destroy<vkDestroyBuffer>(device_, index_buffer_);
+    Vk::free_memory(device_, index_buffer_memory_);
 
     Vk::destroy<vkDestroyFence>(device_, in_flight_fences_);
     Vk::destroy<vkDestroySemaphore>(device_, render_finished_semaphores_);
@@ -1055,10 +990,7 @@ void Application::create_sync_objects()
         VkSemaphore semaphore;
         VkSemaphoreCreateInfo create_info{};
         create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        vk_expect_success(
-            vkCreateSemaphore(dev, &create_info, nullptr, &semaphore),
-            "vkCreateSemaphore"
-        );
+        vk_wrap(vkCreateSemaphore)(dev, &create_info, nullptr, &semaphore);
         return semaphore;
     };
 
@@ -1068,10 +1000,7 @@ void Application::create_sync_objects()
         VkFenceCreateInfo create_info{};
         create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-        vk_expect_success(
-            vkCreateFence(dev, &create_info, nullptr, &fence),
-            "vkCreateFence"
-        );
+        vk_wrap(vkCreateFence)(dev, &create_info, nullptr, &fence);
         return fence;
     };
 

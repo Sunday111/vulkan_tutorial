@@ -7,20 +7,22 @@
 #include "error_handling.h"
 
 template<auto fn, typename Element, typename... FunctionArgs>
-void vk_get_array(const std::string_view& name, std::vector<Element>& elements, FunctionArgs&&... function_args)
+void vk_get_array(const std::string_view& name, std::vector<Element>& elements,
+    const std::string_view& file, int line, FunctionArgs&&... function_args)
 {
     ui32 num_elements = 0;
-    vk_expect_success(fn(function_args..., &num_elements, nullptr), "{}: get count", name);
+    vk_expect(fn(function_args..., &num_elements, nullptr), VK_SUCCESS, name, file,  line);
     elements.resize(num_elements);
 
     [[likely]]
     if (num_elements > 0)
     {
-        vk_expect_success(fn(function_args..., &num_elements, elements.data()), "{}: get data", name);
+        vk_expect(fn(function_args..., &num_elements, elements.data()), VK_SUCCESS, name, file, line);
     }
 }
 
-#define VK_GET_ARRAY(fn, arr, ...) vk_get_array<fn>(#fn, arr, __VA_ARGS__);
+#define VK_GET_ARRAY(fn, arr, ...) vk_get_array<fn>(#fn, arr, __FILE__, __LINE__, __VA_ARGS__);
+#define VK_GET_ARRAY_NO_ARG(fn, arr) vk_get_array<fn>(#fn, arr, __FILE__, __LINE__);
 
 void VulkanUtility::get_devices(VkInstance instance, std::vector<VkPhysicalDevice>& out_devices) noexcept
 {
@@ -43,9 +45,7 @@ void VulkanUtility::get_queue_families(VkPhysicalDevice device, std::vector<VkQu
 bool VulkanUtility::device_supports_present(VkPhysicalDevice device, ui32 queue_family_index, VkSurfaceKHR surface)
 {
     VkBool32 present_supported = false;
-    vk_expect_success(
-        vkGetPhysicalDeviceSurfaceSupportKHR(device, queue_family_index, surface, &present_supported),
-        "vkGetPhysicalDeviceSurfaceSupportKHR");
+    vk_wrap(vkGetPhysicalDeviceSurfaceSupportKHR)(device, queue_family_index, surface, &present_supported);
     return present_supported;
 }
 
@@ -67,6 +67,11 @@ void VulkanUtility::get_device_surface_present_modes(VkPhysicalDevice device, Vk
 void VulkanUtility::get_swap_chain_images(VkDevice device, VkSwapchainKHR swap_chain, std::vector<VkImage>& images)
 {
     VK_GET_ARRAY(vkGetSwapchainImagesKHR, images, device, swap_chain);
+}
+
+void get_instance_layer_propertoes(std::vector<VkLayerProperties>& properties)
+{
+    VK_GET_ARRAY_NO_ARG(vkEnumerateInstanceLayerProperties, properties);
 }
 
 std::string_view VulkanUtility::serveriity_to_string(VkDebugUtilsMessageSeverityFlagBitsEXT severity)

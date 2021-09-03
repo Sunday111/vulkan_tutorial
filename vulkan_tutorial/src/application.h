@@ -6,6 +6,7 @@
 #include <memory>
 #include <filesystem>
 #include <optional>
+#include <span>
 
 #include "vulkan/vulkan.h"
 
@@ -14,6 +15,7 @@
 #include "device_surface_info.h"
 
 #include "glm/glm.hpp"
+#include "error_handling.h"
 
 template<typename T>
 struct StructDescriptor
@@ -59,9 +61,14 @@ struct StructDescriptor<Vertex>
 };
 
 const std::vector<Vertex> vertices = {
-    {{ 0.0f, -0.5f}, { 1.0f, 0.0f, 1.0f}},
-    {{ 0.5f,  0.5f}, { 0.0f, 1.0f, 0.0f}},
-    {{-0.5f,  0.5f}, { 0.0f, 0.0f, 1.0f}}
+    {{-0.5f, -0.5f}, { 1.0f, 0.0f, 0.0f}},
+    {{ 0.5f, -0.5f}, { 0.0f, 1.0f, 0.0f}},
+    {{ 0.5f,  0.5f}, { 0.0f, 0.0f, 1.0f}},
+    {{-0.5f,  0.5f}, { 1.0f, 1.0f, 1.0f}}
+};
+
+const std::vector<ui16> indices = {
+    0, 1, 2, 2, 3, 0
 };
 
 struct GLFWwindow;
@@ -95,6 +102,7 @@ private:
     [[nodiscard]] VkCommandPool create_command_pool(ui32 queue_family_index, VkCommandPoolCreateFlags flags = 0) const;
     void create_command_pools();
     void create_vertex_buffers();
+    void create_index_buffers();
     void create_command_buffers();
     void create_sync_objects();
     VkShaderModule create_shader_module(const std::filesystem::path& file, std::vector<char>& cache);
@@ -120,6 +128,36 @@ private:
     std::vector<const char*> get_required_extensions();
     [[nodiscard]] std::filesystem::path get_shaders_dir() const noexcept;
 
+    template<typename T>
+    void create_gpu_buffer(std::span<const T> view, VkBufferUsageFlags usage_flags,
+        VkBuffer& buffer, VkDeviceMemory& buffer_memory)
+    {
+        const VkDeviceSize buffer_size = sizeof(T) * view.size();
+        VkBuffer staging_buffer = nullptr;
+        VkDeviceMemory staging_buffer_memory = nullptr;
+        create_buffer(buffer_size,
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            staging_buffer, staging_buffer_memory);
+
+        void* mapped = nullptr;
+        vk_wrap(vkMapMemory)(device_, staging_buffer_memory, 0, buffer_size, 0, &mapped);
+        std::copy(view.begin(), view.end(), (T*)mapped);
+        vkUnmapMemory(device_, staging_buffer_memory);
+
+        // buffer is device local -
+        // it receives data by copying it from the staging buffer
+        create_buffer(buffer_size,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage_flags,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            buffer, buffer_memory);
+
+        copy_buffer(staging_buffer, buffer, buffer_size);
+
+        VulkanUtility::destroy<vkDestroyBuffer>(device_, staging_buffer);
+        VulkanUtility::free_memory(device_, staging_buffer_memory);
+    }
+
 private:
     std::vector<VkImage> swap_chain_images_;
     std::vector<VkImageView> swap_chain_image_views_;
@@ -134,6 +172,8 @@ private:
     std::filesystem::path executable_file_;
     VkDeviceMemory vertex_buffer_memory_ = nullptr;
     VkBuffer vertex_buffer_ = nullptr;
+    VkDeviceMemory index_buffer_memory_ = nullptr;
+    VkBuffer index_buffer_ = nullptr;
     VkQueue graphics_queue_ = nullptr;
     VkQueue present_queue_ = nullptr;
     VkCommandPool persistent_command_pool_ = nullptr;

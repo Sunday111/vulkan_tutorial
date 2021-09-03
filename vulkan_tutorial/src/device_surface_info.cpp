@@ -5,14 +5,9 @@
 
 void DeviceSurfaceInfo::populate(VkPhysicalDevice device, VkSurfaceKHR surface)
 {
-    using Vk = VulkanUtility;
-
-    vk_expect_success(
-        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &capabilities),
-        "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
-
-    Vk::get_device_surface_formats(device, surface, formats);
-    Vk::get_device_surface_present_modes(device, surface, present_modes);
+    vk_wrap(vkGetPhysicalDeviceSurfaceCapabilitiesKHR)(device, surface, &capabilities);
+    VulkanUtility::get_device_surface_formats(device, surface, formats);
+    VulkanUtility::get_device_surface_present_modes(device, surface, present_modes);
 }
 
 VkSurfaceFormatKHR DeviceSurfaceInfo::choose_surface_format(const VkSurfaceFormatKHR& preferred) const noexcept
