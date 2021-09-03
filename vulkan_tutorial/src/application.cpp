@@ -78,6 +78,7 @@ void Application::initialize_window()
 
 void Application::frame_buffer_resize_callback(GLFWwindow* window, int width, int height)
 {
+    unused_var(width, height);
     auto app = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
     app->frame_buffer_resized_ = true;
 }
@@ -634,6 +635,7 @@ void Application::recreate_swap_chain()
         vk_expect_success(vkDeviceWaitIdle(device_), "vkDeviceWaitIdle");
     }
 
+    cleanup_swap_chain();
     create_swap_chain();
     create_swap_chain_image_views();
     create_render_pass();
