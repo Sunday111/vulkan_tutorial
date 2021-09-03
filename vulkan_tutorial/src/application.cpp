@@ -157,6 +157,38 @@ void Application::create_surface()
         "glfwCreateWindowSurface");
 }
 
+
+void Application::create_buffer(VkDeviceSize size, VkBufferUsageFlags usage,
+    VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& buffer_memory) const
+{
+    VkBufferCreateInfo buffer_info {};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.size = size;
+    buffer_info.usage = usage;
+    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    vk_expect_success(
+        vkCreateBuffer(device_, &buffer_info, nullptr, &buffer),
+        "vkCreateBuffer");
+
+    VkMemoryRequirements memory_requirements;
+    vkGetBufferMemoryRequirements(device_, buffer, &memory_requirements);
+
+    VkMemoryAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.allocationSize = memory_requirements.size;
+    alloc_info.memoryTypeIndex = device_info_.get_memory_type_index(memory_requirements.memoryTypeBits, properties);
+    
+    vk_expect_success(
+        vkAllocateMemory(device_, &alloc_info, nullptr, &buffer_memory),
+        "vkAllocateMemory");
+
+    vk_expect_success(
+        vkBindBufferMemory(device_, vertex_buffer_, buffer_memory, 0),
+        "vkBindBufferMemory"
+    );
+}
+
 void Application::create_device()
 {
     float queue_priority = 1.0f;
@@ -508,39 +540,14 @@ void Application::create_command_pool()
 
 void Application::create_vertex_buffers()
 {
-    VkBufferCreateInfo buffer_info{};
-    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_info.size = sizeof(vertices[0]) * vertices.size();
-    buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    buffer_info.flags = 0;
-
-    vk_expect_success(
-        vkCreateBuffer(device_, &buffer_info, nullptr, &vertex_buffer_),
-        "vkCreateBuffer"
-    );
-
-    VkMemoryRequirements memory_requirements;
-    vkGetBufferMemoryRequirements(device_, vertex_buffer_, &memory_requirements);
-
-    VkMemoryAllocateInfo alloc_info{};
-    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    alloc_info.allocationSize = memory_requirements.size;
-    alloc_info.memoryTypeIndex = device_info_.get_memory_type_index(memory_requirements.memoryTypeBits,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    
-    vk_expect_success(
-        vkAllocateMemory(device_, &alloc_info, nullptr, &vertex_buffer_memory_),
-        "vkAllocateMemory");
-
-    vk_expect_success(
-        vkBindBufferMemory(device_, vertex_buffer_, vertex_buffer_memory_, 0),
-        "vkBindBufferMemory"
-    );
+    const VkDeviceSize buffer_size = sizeof(vertices[0]) * vertices.size();
+    create_buffer(buffer_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        vertex_buffer_, vertex_buffer_memory_);
 
     void* mapped = nullptr;
     vk_expect_success(
-        vkMapMemory(device_, vertex_buffer_memory_, 0, buffer_info.size, 0, &mapped),
+        vkMapMemory(device_, vertex_buffer_memory_, 0, buffer_size, 0, &mapped),
         "vkMapMemory");
     std::copy(vertices.begin(), vertices.end(), (Vertex*)mapped);
     vkUnmapMemory(device_, vertex_buffer_memory_);

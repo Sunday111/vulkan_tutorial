@@ -100,6 +100,8 @@ private:
     void checkValidationLayerSupport();
     void initialize_vulkan();
     void create_instance();
+    void create_buffer(VkDeviceSize size, VkBufferUsageFlags usage,
+        VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& buffer_memory) const;
 
     void initialize_window();
     static void frame_buffer_resize_callback(GLFWwindow* window, int width, int height);
