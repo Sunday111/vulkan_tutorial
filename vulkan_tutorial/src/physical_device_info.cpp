@@ -1,5 +1,7 @@
 #include "physical_device_info.h"
 
+#include <stdexcept>
+
 #include "vulkan_utility.h"
 #include "error_handling.h"
 

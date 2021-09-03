@@ -128,34 +128,15 @@ private:
     std::vector<const char*> get_required_extensions();
     [[nodiscard]] std::filesystem::path get_shaders_dir() const noexcept;
 
+    void create_gpu_buffer_raw(const void* data, VkDeviceSize buffer_size,
+        VkBufferUsageFlags usage_flags, VkBuffer& buffer, VkDeviceMemory& buffer_memory);
+
     template<typename T>
     void create_gpu_buffer(std::span<const T> view, VkBufferUsageFlags usage_flags,
         VkBuffer& buffer, VkDeviceMemory& buffer_memory)
     {
         const VkDeviceSize buffer_size = sizeof(T) * view.size();
-        VkBuffer staging_buffer = nullptr;
-        VkDeviceMemory staging_buffer_memory = nullptr;
-        create_buffer(buffer_size,
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            staging_buffer, staging_buffer_memory);
-
-        void* mapped = nullptr;
-        vk_wrap(vkMapMemory)(device_, staging_buffer_memory, 0, buffer_size, 0, &mapped);
-        std::copy(view.begin(), view.end(), (T*)mapped);
-        vkUnmapMemory(device_, staging_buffer_memory);
-
-        // buffer is device local -
-        // it receives data by copying it from the staging buffer
-        create_buffer(buffer_size,
-            VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage_flags,
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            buffer, buffer_memory);
-
-        copy_buffer(staging_buffer, buffer, buffer_size);
-
-        VulkanUtility::destroy<vkDestroyBuffer>(device_, staging_buffer);
-        VulkanUtility::free_memory(device_, staging_buffer_memory);
+        create_gpu_buffer_raw(view.data(), buffer_size, usage_flags, buffer, buffer_memory);
     }
 
 private:

@@ -5,6 +5,7 @@
 #include <cmath>
 #include <stdexcept>
 #include <string_view>
+#include <cstring>
 
 #include <GLFW/glfw3.h>
 
@@ -12,6 +13,7 @@
 #include "unused_var.h"
 #include "vulkan_utility.h"
 #include "read_file.h"
+#include "fmt/format.h"
 
 void destroy_debug_messenger(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) {
     auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
@@ -653,7 +655,7 @@ void Application::checkValidationLayerSupport()
         [[unlikely]]
         if (it == availableLayers.end())
         {
-            auto message = fmt::format("{} validation layer is not present", name_view);
+            auto message = fmt::format("{} layer is not present", name_view);
             throw std::runtime_error(std::move(message));
         }
     }
@@ -759,7 +761,7 @@ std::optional<ui32> Application::acquire_next_swap_chain_image() const
         break;
 
     default:
-        throw std::runtime_error("vkAcquireNextImageKHR failed");
+        vk_throw(vkAcquireNextImageKHR, ret_code);
         break;
     }
 
@@ -790,7 +792,7 @@ void Application::draw_frame()
             break;
 
         default:
-            throw std::runtime_error("vkAcquireNextImageKHR failed");
+            vk_throw(vkAcquireNextImageKHR, acquire_result);
             break;
         }
     }
@@ -844,7 +846,7 @@ void Application::draw_frame()
         }
         else if (present_result != VK_SUCCESS)
         {
-            throw std::runtime_error("vkQueuePresentKHR failed");
+            vk_throw(vkQueuePresentKHR, present_result);
         }
     }
 
@@ -945,6 +947,35 @@ VkPresentModeKHR Application::choose_present_mode() const
 std::filesystem::path Application::get_shaders_dir() const noexcept
 {
     return executable_file_.parent_path() / "shaders";
+}
+
+
+void Application::create_gpu_buffer_raw(const void* data, VkDeviceSize buffer_size,
+    VkBufferUsageFlags usage_flags, VkBuffer& buffer, VkDeviceMemory& buffer_memory)
+{
+    VkBuffer staging_buffer = nullptr;
+    VkDeviceMemory staging_buffer_memory = nullptr;
+    create_buffer(buffer_size,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        staging_buffer, staging_buffer_memory);
+
+    void* mapped = nullptr;
+    vk_wrap(vkMapMemory)(device_, staging_buffer_memory, 0, buffer_size, 0, &mapped);
+    std::memcpy(mapped, data, buffer_size);
+    vkUnmapMemory(device_, staging_buffer_memory);
+
+    // buffer is device local -
+    // it receives data by copying it from the staging buffer
+    create_buffer(buffer_size,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage_flags,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        buffer, buffer_memory);
+
+    copy_buffer(staging_buffer, buffer, buffer_size);
+
+    VulkanUtility::destroy<vkDestroyBuffer>(device_, staging_buffer);
+    VulkanUtility::free_memory(device_, staging_buffer_memory);
 }
 
 VkExtent2D Application::choose_swap_extent() const
