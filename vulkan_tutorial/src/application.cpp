@@ -611,6 +611,21 @@ void Application::initialize_vulkan()
     create_sync_objects();
 }
 
+void Application::recreate_swap_chain()
+{
+    if (device_)
+    {
+        vk_expect_success(vkDeviceWaitIdle(device_), "vkDeviceWaitIdle");
+    }
+
+    create_swap_chain();
+    create_swap_chain_image_views();
+    create_render_pass();
+    create_graphics_pipeline();
+    create_frame_buffers();
+    create_command_buffers();
+}
+
 void Application::create_instance()
 {
     checkValidationLayerSupport();
@@ -724,16 +739,11 @@ void Application::draw_frame()
 void Application::cleanup()
 {
     using Vk = VulkanUtility;
+    cleanup_swap_chain();
     Vk::destroy<vkDestroyFence>(device_, in_flight_fences_);
     Vk::destroy<vkDestroySemaphore>(device_, render_finished_semaphores_);
     Vk::destroy<vkDestroySemaphore>(device_, image_available_semaphores_);
     Vk::destroy<vkDestroyCommandPool>(device_, command_pool_);
-    Vk::destroy<vkDestroyFramebuffer>(device_, swap_chain_frame_buffers_);
-    Vk::destroy<vkDestroyPipeline>(device_, graphics_pipeline_);
-    Vk::destroy<vkDestroyPipelineLayout>(device_, pipeline_layout_);
-    Vk::destroy<vkDestroyRenderPass>(device_, render_pass_);
-    Vk::destroy<vkDestroyImageView>(device_, swap_chain_image_views_);
-    Vk::destroy<vkDestroySwapchainKHR>(device_, swap_chain_);
     Vk::destroy<vkDestroyDevice>(device_);
     Vk::destroy<vkDestroySurfaceKHR>(instance_, surface_);
     Vk::destroy<vkDestroyInstance>(instance_);
@@ -743,12 +753,28 @@ void Application::cleanup()
         glfwDestroyWindow(window_);
         window_ = nullptr;
     }
-
+    
     if (glfw_initialized)
     {
         glfwTerminate();
         glfw_initialized = false;
     }
+}
+
+void Application::cleanup_swap_chain()
+{
+    using Vk = VulkanUtility;
+    Vk::destroy<vkDestroyFramebuffer>(device_, swap_chain_frame_buffers_);
+    if (!command_buffers_.empty())
+    {
+        vkFreeCommandBuffers(device_, command_pool_, static_cast<uint32_t>(command_buffers_.size()), command_buffers_.data());
+        command_buffers_.clear();
+    }
+    Vk::destroy<vkDestroyPipeline>(device_, graphics_pipeline_);
+    Vk::destroy<vkDestroyPipelineLayout>(device_, pipeline_layout_);
+    Vk::destroy<vkDestroyRenderPass>(device_, render_pass_);
+    Vk::destroy<vkDestroyImageView>(device_, swap_chain_image_views_);
+    Vk::destroy<vkDestroySwapchainKHR>(device_, swap_chain_);
 }
 
 VkSurfaceFormatKHR Application::choose_surface_format() const

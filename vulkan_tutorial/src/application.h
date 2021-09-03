@@ -30,6 +30,7 @@ public:
     void run();
 
 private:
+    void recreate_swap_chain();
     void pick_physical_device();
     void create_surface();
     void create_device();
@@ -51,6 +52,7 @@ private:
     void draw_frame();
 
     void cleanup();
+    void cleanup_swap_chain();
     VkSurfaceFormatKHR choose_surface_format() const;
     VkPresentModeKHR choose_present_mode() const;
     VkExtent2D choose_swap_extent() const;
