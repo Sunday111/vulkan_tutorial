@@ -7,7 +7,6 @@ file(GLOB_RECURSE source_list "${target_src_root}/*.cpp")
 
 set(target_shader_root ${CMAKE_CURRENT_SOURCE_DIR}/shaders/)
 file(GLOB_RECURSE shader_list "${target_shader_root}/**")
-message(${shader_list})
 
 add_executable(${target_name} ${source_list})
 target_link_libraries(${target_name} glfw fmt glm Vulkan::Vulkan)
@@ -32,7 +31,6 @@ endif()
 foreach(shader_file ${shader_list})
 	get_filename_component(shader_name ${shader_file} NAME_WE)
 	set(compiled_shader shaders/${shader_name}.spv)
-
 	add_custom_command(
 		TARGET ${target_name} PRE_BUILD
 		COMMAND ${Vulkan_GLSLC_EXECUTABLE} ${shader_file} -o ${compiled_shader}
