@@ -1,6 +1,6 @@
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
-#include "fmt/format.h"
+#include "spdlog/spdlog.h"
 
 #include <string_view>
 #include <filesystem>
@@ -21,7 +21,7 @@ int main(int argc, char** argv)
     }
     catch (const std::exception& e)
     {
-        fmt::print("Exception: {}\n", e.what());
+        spdlog::critical("Unhandled exception: {}\n", e.what());
         return EXIT_FAILURE;
     }
 

@@ -9,7 +9,7 @@ set(target_shader_root ${CMAKE_CURRENT_SOURCE_DIR}/shaders/)
 file(GLOB_RECURSE shader_list "${target_shader_root}/**")
 
 add_executable(${target_name} ${source_list})
-target_link_libraries(${target_name} glfw fmt glm Vulkan::Vulkan)
+target_link_libraries(${target_name} glfw fmt glm spdlog Vulkan::Vulkan)
 target_compile_definitions(${target_name} PUBLIC
 	-DGLFW_INCLUDE_VULKAN
 	-DGLM_FORCE_RADIANS

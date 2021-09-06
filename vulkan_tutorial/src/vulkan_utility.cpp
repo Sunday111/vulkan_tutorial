@@ -138,3 +138,11 @@ void VulkanUtility::free_memory(VkDevice device, VkDeviceMemory& memory, const V
         memory = nullptr;
     }
 }
+
+void VulkanUtility::free_memory(VkDevice device, std::span<VkDeviceMemory> memory, const VkAllocationCallbacks* allocation_callbacks) noexcept
+{
+    for(VkDeviceMemory& val:memory)
+    {
+        free_memory(device, val, allocation_callbacks);
+    }
+}

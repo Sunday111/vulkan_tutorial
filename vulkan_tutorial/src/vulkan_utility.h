@@ -2,6 +2,7 @@
 
 #include <string_view>
 #include <vector>
+#include <span>
 
 #include "integer.h"
 #include "vulkan/vulkan.h"
@@ -51,4 +52,5 @@ public:
     }
 
     static void free_memory(VkDevice device, VkDeviceMemory& memory, const VkAllocationCallbacks* allocation_callbacks = nullptr) noexcept;
+    static void free_memory(VkDevice device, std::span<VkDeviceMemory> memory, const VkAllocationCallbacks* allocation_callbacks = nullptr) noexcept;
 };
