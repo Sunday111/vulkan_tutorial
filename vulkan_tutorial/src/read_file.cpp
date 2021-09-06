@@ -4,7 +4,7 @@
 
 #include "fmt/format.h"
 
-void read_file(const std::filesystem::path& path, std::vector<char>& buffer)
+void ReadFile(const std::filesystem::path& path, std::vector<char>& buffer)
 {
     std::ifstream file(path, std::ios::binary | std::ios::ate);
 

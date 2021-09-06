@@ -35,67 +35,67 @@ public:
     Application& operator=(const Application&) = delete;
     ~Application();
 
-    void set_executable_file(std::filesystem::path path);
-    void run();
+    void SetExecutableFile(std::filesystem::path path);
+    void Run();
 
 private:
-    void recreate_swap_chain();
-    void pick_physical_device();
-    void create_surface();
-    void create_device();
-    void create_swap_chain();
-    void create_swap_chain_image_views();
-    void create_render_pass();
-    void create_descriptor_set_layout();
-    void create_graphics_pipeline();
-    void create_frame_buffers();
-    [[nodiscard]] VkCommandPool create_command_pool(ui32 queue_family_index, VkCommandPoolCreateFlags flags = 0) const;
-    void create_command_pools();
-    void create_vertex_buffers();
-    void create_index_buffers();
-    void create_uniform_buffers();
-    void create_descriptor_pool();
-    void create_descriptor_sets();
-    void create_command_buffers();
-    void create_sync_objects();
-    VkShaderModule create_shader_module(const std::filesystem::path& file, std::vector<char>& cache);
-    void check_required_layers_support();
-    void initialize_vulkan();
-    void create_instance();
-    void setup_debug_messenger();
-    void create_buffer(VkDeviceSize size, VkBufferUsageFlags usage,
+    void RecreateSwapChain();
+    void PickPhysicalDevice();
+    void CreateSurface();
+    void CreateDevice();
+    void CreateSwapChain();
+    void CreateSwapChainImageViews();
+    void CreateRenderPass();
+    void CreateDescriptorSetLayout();
+    void CreateGraphicsPipeline();
+    void CreateFrameBuffers();
+    [[nodiscard]] VkCommandPool CreateCommandPool(ui32 queue_family_index, VkCommandPoolCreateFlags flags = 0) const;
+    void CreateCommandPools();
+    void CreateVertexBuffers();
+    void CreateIndexBuffers();
+    void CreateUniformBuffers();
+    void CreateDescriptorPool();
+    void CreateDescriptorSets();
+    void CreateCommandBuffers();
+    void CreateSyncObjects();
+    VkShaderModule CreateShaderModule(const std::filesystem::path& file, std::vector<char>& cache);
+    void CheckRequiredLayersSupport();
+    void InitializeVulkan();
+    void CreateInstance();
+    void SetupDebugMessenger();
+    void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
         VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& buffer_memory) const;
-    void copy_buffer(VkBuffer src, VkBuffer dst, VkDeviceSize size);
+    void CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size);
 
-    void initialize_window();
-    static void frame_buffer_resize_callback(GLFWwindow* window, int width, int height);
+    void InitializeWindow();
+    static void FrameBufferResizeCallback(GLFWwindow* window, int width, int height);
 
-    void main_loop();
-    std::optional<ui32> acquire_next_swap_chain_image() const;
-    void draw_frame();
-    void update_uniform_buffer(ui32 current_image);
+    void MainLoop();
+    std::optional<ui32> AcquireNextSwapChainImage() const;
+    void DrawFrame();
+    void UpdateUniformBuffer(ui32 current_image);
 
-    void cleanup();
-    void cleanup_swap_chain();
-    VkSurfaceFormatKHR choose_surface_format() const;
-    VkPresentModeKHR choose_present_mode() const;
-    VkExtent2D choose_swap_extent() const;
-    std::vector<const char*> get_required_extensions();
-    [[nodiscard]] std::filesystem::path get_shaders_dir() const noexcept;
+    void Cleanup();
+    void CleanupSwapChain();
+    VkSurfaceFormatKHR ChooseSurfaceFormat() const;
+    VkPresentModeKHR ChoosePresentMode() const;
+    VkExtent2D ChooseSwapExtent() const;
+    std::vector<const char*> GetRequiredExtensions();
+    [[nodiscard]] std::filesystem::path GetShadersDir() const noexcept;
 
-    void create_gpu_buffer_raw(const void* data, VkDeviceSize buffer_size,
+    void CreateGpuBufferRaw(const void* data, VkDeviceSize buffer_size,
         VkBufferUsageFlags usage_flags, VkBuffer& buffer, VkDeviceMemory& buffer_memory);
 
     template<typename T>
-    void create_gpu_buffer(std::span<const T> view, VkBufferUsageFlags usage_flags,
+    void CreateGpuBuffer(std::span<const T> view, VkBufferUsageFlags usage_flags,
         VkBuffer& buffer, VkDeviceMemory& buffer_memory)
     {
         const VkDeviceSize buffer_size = sizeof(T) * view.size();
-        create_gpu_buffer_raw(view.data(), buffer_size, usage_flags, buffer, buffer_memory);
+        CreateGpuBufferRaw(view.data(), buffer_size, usage_flags, buffer, buffer_memory);
     }
 
-    [[nodiscard]] static TimePoint get_global_time() noexcept { return std::chrono::high_resolution_clock::now(); }
-    [[nodiscard]] auto get_time_since_app_start() const noexcept { return get_global_time() - app_start_time_; }
+    [[nodiscard]] static TimePoint GetGlobalTime() noexcept { return std::chrono::high_resolution_clock::now(); }
+    [[nodiscard]] auto GetTimeSinceAppStart() const noexcept { return GetGlobalTime() - app_start_time_; }
 
 private:
     VkAnnotate annotate_;

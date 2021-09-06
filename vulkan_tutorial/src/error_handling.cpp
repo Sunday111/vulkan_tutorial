@@ -6,19 +6,19 @@
 
 #include "vulkan_utility.h"
 
-void vk_throw_impl(VkResult error_code, const std::string_view& api_call_name, const std::string_view& file, int line)
+void VkThrowImpl(VkResult error_code, const std::string_view& api_call_name, const std::string_view& file, int line)
 {
     throw std::runtime_error(fmt::format(
         "operation {} failed:\n"
             "\terror code: {}\n"
             "\tat:{}:{}\n",
         api_call_name,
-        VulkanUtility::vk_result_to_string(error_code),
+        VulkanUtility::ResultToString(error_code),
         file, line
         ));
 }
 
-void vk_expect(VkResult actual, VkResult expected, const std::string_view& api_call_name,
+void VkExpect(VkResult actual, VkResult expected, const std::string_view& api_call_name,
     const std::string_view& file, int line)
 {
     [[unlikely]]
@@ -30,8 +30,8 @@ void vk_expect(VkResult actual, VkResult expected, const std::string_view& api_c
                 "\tactual: {}\n"
                 "\tat:{}:{}\n",
             api_call_name,
-            VulkanUtility::vk_result_to_string(expected),
-            VulkanUtility::vk_result_to_string(actual),
+            VulkanUtility::ResultToString(expected),
+            VulkanUtility::ResultToString(actual),
             file, line
             ));
     }

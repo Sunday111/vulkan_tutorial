@@ -11,7 +11,7 @@ template<>
 struct StructDescriptor<Vertex>
 {
     [[nodiscard]]
-    static constexpr std::array<VkVertexInputBindingDescription, 1> get_binding_description() noexcept
+    static constexpr std::array<VkVertexInputBindingDescription, 1> GetBindingDescription() noexcept
     {
         VkVertexInputBindingDescription binding_description{};
 
@@ -23,7 +23,7 @@ struct StructDescriptor<Vertex>
     }
 
     [[nodiscard]]
-    static constexpr std::array<VkVertexInputAttributeDescription, 2> get_input_attribute_descriptions() noexcept
+    static constexpr std::array<VkVertexInputAttributeDescription, 2> GetInputAttributeDescriptions() noexcept
     {
         VkVertexInputAttributeDescription d0{};
         d0.binding = 0;

@@ -11,13 +11,13 @@
 
 int main(int argc, char** argv)
 {
-    unused_var(argc);
+    UnusedVar(argc);
 
     try
     {
         Application app;
-        app.set_executable_file(std::filesystem::path(argv[0]));
-        app.run();
+        app.SetExecutableFile(std::filesystem::path(argv[0]));
+        app.Run();
     }
     catch (const std::exception& e)
     {

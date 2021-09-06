@@ -1,6 +1,7 @@
 #include "vulkan_utility.h"
 
 #include <cassert>
+#include <cstring>
 
 #include "macro.h"
 #include "integer.h"
@@ -11,25 +12,25 @@ void vk_get_array(const std::string_view& name, std::vector<Element>& elements,
     const std::string_view& file, int line, FunctionArgs&&... function_args)
 {
     ui32 num_elements = 0;
-    vk_expect(fn(function_args..., &num_elements, nullptr), VK_SUCCESS, name, file,  line);
+    VkExpect(fn(function_args..., &num_elements, nullptr), VK_SUCCESS, name, file,  line);
     elements.resize(num_elements);
 
     [[likely]]
     if (num_elements > 0)
     {
-        vk_expect(fn(function_args..., &num_elements, elements.data()), VK_SUCCESS, name, file, line);
+        VkExpect(fn(function_args..., &num_elements, elements.data()), VK_SUCCESS, name, file, line);
     }
 }
 
 #define VK_GET_ARRAY(fn, arr, ...) vk_get_array<fn>(#fn, arr, __FILE__, __LINE__, __VA_ARGS__);
 #define VK_GET_ARRAY_NO_ARG(fn, arr) vk_get_array<fn>(#fn, arr, __FILE__, __LINE__);
 
-void VulkanUtility::get_devices(VkInstance instance, std::vector<VkPhysicalDevice>& out_devices) noexcept
+void VulkanUtility::GetDevices(VkInstance instance, std::vector<VkPhysicalDevice>& out_devices) noexcept
 {
     VK_GET_ARRAY(vkEnumeratePhysicalDevices, out_devices, instance);
 }
 
-void VulkanUtility::get_queue_families(VkPhysicalDevice device, std::vector<VkQueueFamilyProperties>& out_queue_families) noexcept
+void VulkanUtility::GetQueueFamilies(VkPhysicalDevice device, std::vector<VkQueueFamilyProperties>& out_queue_families) noexcept
 {
     ui32 num_queue_families = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(device, &num_queue_families, nullptr);
@@ -42,39 +43,39 @@ void VulkanUtility::get_queue_families(VkPhysicalDevice device, std::vector<VkQu
     }
 }
 
-bool VulkanUtility::device_supports_present(VkPhysicalDevice device, ui32 queue_family_index, VkSurfaceKHR surface)
+bool VulkanUtility::DeviceSupportsPresentation(VkPhysicalDevice device, ui32 queue_family_index, VkSurfaceKHR surface)
 {
     VkBool32 present_supported = false;
-    vk_wrap(vkGetPhysicalDeviceSurfaceSupportKHR)(device, queue_family_index, surface, &present_supported);
+    VkWrap(vkGetPhysicalDeviceSurfaceSupportKHR)(device, queue_family_index, surface, &present_supported);
     return present_supported;
 }
 
-void VulkanUtility::get_device_extensions(VkPhysicalDevice device, std::vector<VkExtensionProperties>& extensions)
+void VulkanUtility::GetDeviceExtensions(VkPhysicalDevice device, std::vector<VkExtensionProperties>& extensions)
 {
     VK_GET_ARRAY(vkEnumerateDeviceExtensionProperties, extensions, device, nullptr);
 }
 
-void VulkanUtility::get_device_surface_formats(VkPhysicalDevice device, VkSurfaceKHR surface, std::vector<VkSurfaceFormatKHR>& out_formats)
+void VulkanUtility::GetDeviceSurfaceFormats(VkPhysicalDevice device, VkSurfaceKHR surface, std::vector<VkSurfaceFormatKHR>& out_formats)
 {
     VK_GET_ARRAY(vkGetPhysicalDeviceSurfaceFormatsKHR, out_formats, device, surface);
 }
 
-void VulkanUtility::get_device_surface_present_modes(VkPhysicalDevice device, VkSurfaceKHR surface, std::vector<VkPresentModeKHR>& modes)
+void VulkanUtility::GetDeviceSurfacePresentMode(VkPhysicalDevice device, VkSurfaceKHR surface, std::vector<VkPresentModeKHR>& modes)
 {
     VK_GET_ARRAY(vkGetPhysicalDeviceSurfacePresentModesKHR, modes, device, surface);
 }
 
-void VulkanUtility::get_swap_chain_images(VkDevice device, VkSwapchainKHR swap_chain, std::vector<VkImage>& images)
+void VulkanUtility::GetSwapChainImages(VkDevice device, VkSwapchainKHR swap_chain, std::vector<VkImage>& images)
 {
     VK_GET_ARRAY(vkGetSwapchainImagesKHR, images, device, swap_chain);
 }
 
-void get_instance_layer_propertoes(std::vector<VkLayerProperties>& properties)
+void GetInstanceLayerProperties(std::vector<VkLayerProperties>& properties)
 {
     VK_GET_ARRAY_NO_ARG(vkEnumerateInstanceLayerProperties, properties);
 }
 
-std::string_view VulkanUtility::serveriity_to_string(VkDebugUtilsMessageSeverityFlagBitsEXT severity)
+std::string_view VulkanUtility::SeverityToString(VkDebugUtilsMessageSeverityFlagBitsEXT severity)
 {
     switch (severity)
     {
@@ -88,7 +89,7 @@ std::string_view VulkanUtility::serveriity_to_string(VkDebugUtilsMessageSeverity
     }
 }
 
-std::string_view VulkanUtility::vk_result_to_string(VkResult vk_result) noexcept
+std::string_view VulkanUtility::ResultToString(VkResult vk_result) noexcept
 {
 #define BCASE(x) case x: return TOSTRING(x)
     switch (vk_result)
@@ -130,7 +131,7 @@ std::string_view VulkanUtility::vk_result_to_string(VkResult vk_result) noexcept
 
 #undef VK_GET_ARRAY
 
-void VulkanUtility::free_memory(VkDevice device, VkDeviceMemory& memory, const VkAllocationCallbacks* allocation_callbacks) noexcept
+void VulkanUtility::FreeMemory(VkDevice device, VkDeviceMemory& memory, const VkAllocationCallbacks* allocation_callbacks) noexcept
 {
     if(memory)
     {
@@ -139,10 +140,18 @@ void VulkanUtility::free_memory(VkDevice device, VkDeviceMemory& memory, const V
     }
 }
 
-void VulkanUtility::free_memory(VkDevice device, std::span<VkDeviceMemory> memory, const VkAllocationCallbacks* allocation_callbacks) noexcept
+void VulkanUtility::FreeMemory(VkDevice device, std::span<VkDeviceMemory> memory, const VkAllocationCallbacks* allocation_callbacks) noexcept
 {
     for(VkDeviceMemory& val:memory)
     {
-        free_memory(device, val, allocation_callbacks);
+        FreeMemory(device, val, allocation_callbacks);
     }
+}
+
+void VulkanUtility::MapCopyUnmap(const void* data, VkDeviceSize size, VkDevice device, VkDeviceMemory device_memory, VkDeviceSize offset, VkMemoryMapFlags mem_map_flags)
+{
+    void* mapped = nullptr;
+    VkWrap(vkMapMemory)(device, device_memory, offset, size, mem_map_flags, &mapped);
+    std::memcpy(mapped, data, size);
+    vkUnmapMemory(device, device_memory);
 }

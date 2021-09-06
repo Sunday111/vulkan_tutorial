@@ -10,19 +10,22 @@
 class VulkanUtility
 {
 public:
-    [[nodiscard]] static std::string_view vk_result_to_string(VkResult vk_result) noexcept;
-    static void get_devices(VkInstance instance, std::vector<VkPhysicalDevice>& out_devices) noexcept;
-    static void get_queue_families(VkPhysicalDevice device, std::vector<VkQueueFamilyProperties>& out_queue_families) noexcept;
-    [[nodiscard]] static bool device_supports_present(VkPhysicalDevice device, ui32 queue_family_index, VkSurfaceKHR surface);
-    static void get_device_extensions(VkPhysicalDevice device, std::vector<VkExtensionProperties>& out_extensions);
-    static void get_device_surface_formats(VkPhysicalDevice device, VkSurfaceKHR surface, std::vector<VkSurfaceFormatKHR>& out_formats);
-    static void get_device_surface_present_modes(VkPhysicalDevice device, VkSurfaceKHR surface, std::vector<VkPresentModeKHR>& out_modes);
-    static void get_swap_chain_images(VkDevice device, VkSwapchainKHR swap_chain, std::vector<VkImage>& out_images);
-    static void get_instance_layer_propertoes(std::vector<VkLayerProperties>& out_properties);
-    [[nodiscard]] static std::string_view serveriity_to_string(VkDebugUtilsMessageSeverityFlagBitsEXT severity);
+    [[nodiscard]] static std::string_view ResultToString(VkResult vk_result) noexcept;
+    static void GetDevices(VkInstance instance, std::vector<VkPhysicalDevice>& out_devices) noexcept;
+    static void GetQueueFamilies(VkPhysicalDevice device, std::vector<VkQueueFamilyProperties>& out_queue_families) noexcept;
+    [[nodiscard]] static bool DeviceSupportsPresentation(VkPhysicalDevice device, ui32 queue_family_index, VkSurfaceKHR surface);
+    static void GetDeviceExtensions(VkPhysicalDevice device, std::vector<VkExtensionProperties>& out_extensions);
+    static void GetDeviceSurfaceFormats(VkPhysicalDevice device, VkSurfaceKHR surface, std::vector<VkSurfaceFormatKHR>& out_formats);
+    static void GetDeviceSurfacePresentMode(VkPhysicalDevice device, VkSurfaceKHR surface, std::vector<VkPresentModeKHR>& out_modes);
+    static void GetSwapChainImages(VkDevice device, VkSwapchainKHR swap_chain, std::vector<VkImage>& out_images);
+    static void GetInstanceLayerProperties(std::vector<VkLayerProperties>& out_properties);
+    [[nodiscard]] static std::string_view SeverityToString(VkDebugUtilsMessageSeverityFlagBitsEXT severity);
+    static void FreeMemory(VkDevice device, VkDeviceMemory& memory, const VkAllocationCallbacks* allocation_callbacks = nullptr) noexcept;
+    static void FreeMemory(VkDevice device, std::span<VkDeviceMemory> memory, const VkAllocationCallbacks* allocation_callbacks = nullptr) noexcept;
+    static void MapCopyUnmap(const void* data, VkDeviceSize size, VkDevice device, VkDeviceMemory device_memory, VkDeviceSize offset = 0, VkMemoryMapFlags mem_map_flags = 0);
 
     template<auto fn, typename Handle>
-    static void destroy(Handle& handle, const VkAllocationCallbacks* allocation_callbacks = nullptr) noexcept
+    static void Destroy(Handle& handle, const VkAllocationCallbacks* allocation_callbacks = nullptr) noexcept
     {
         if (handle)
         {
@@ -32,7 +35,7 @@ public:
     }
 
     template<auto fn, typename Owner, typename Handle>
-    static void destroy(Owner& owner, Handle& handle, const VkAllocationCallbacks* allocation_callbacks = nullptr) noexcept
+    static void Destroy(Owner& owner, Handle& handle, const VkAllocationCallbacks* allocation_callbacks = nullptr) noexcept
     {
         if (handle)
         {
@@ -46,11 +49,16 @@ public:
     {
         while (!handles.empty())
         {
-            destroy<fn>(owner, handles.back(), allocation_callbacks);
+            Destroy<fn>(owner, handles.back(), allocation_callbacks);
             handles.pop_back();
         }
     }
 
-    static void free_memory(VkDevice device, VkDeviceMemory& memory, const VkAllocationCallbacks* allocation_callbacks = nullptr) noexcept;
-    static void free_memory(VkDevice device, std::span<VkDeviceMemory> memory, const VkAllocationCallbacks* allocation_callbacks = nullptr) noexcept;
+    template<typename T>
+    static void MapCopyUnmap(T& object, VkDevice device, VkDeviceMemory device_memory,
+        VkDeviceSize offset = 0, VkMemoryMapFlags mem_map_flags = 0)
+    {
+        MapCopyUnmap(&object, sizeof(T), device, device_memory, offset, mem_map_flags);
+    }
+
 };

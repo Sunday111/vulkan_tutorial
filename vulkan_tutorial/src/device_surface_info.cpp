@@ -3,14 +3,14 @@
 #include "vulkan_utility.h"
 #include "error_handling.h"
 
-void DeviceSurfaceInfo::populate(VkPhysicalDevice device, VkSurfaceKHR surface)
+void DeviceSurfaceInfo::Populate(VkPhysicalDevice device, VkSurfaceKHR surface)
 {
-    vk_wrap(vkGetPhysicalDeviceSurfaceCapabilitiesKHR)(device, surface, &capabilities);
-    VulkanUtility::get_device_surface_formats(device, surface, formats);
-    VulkanUtility::get_device_surface_present_modes(device, surface, present_modes);
+    VkWrap(vkGetPhysicalDeviceSurfaceCapabilitiesKHR)(device, surface, &capabilities);
+    VulkanUtility::GetDeviceSurfaceFormats(device, surface, formats);
+    VulkanUtility::GetDeviceSurfacePresentMode(device, surface, present_modes);
 }
 
-VkSurfaceFormatKHR DeviceSurfaceInfo::choose_surface_format(const VkSurfaceFormatKHR& preferred) const noexcept
+VkSurfaceFormatKHR DeviceSurfaceInfo::ChooseSurfaceFormat(const VkSurfaceFormatKHR& preferred) const noexcept
 {
     size_t best_index = 0;
     int best_score = -1;
