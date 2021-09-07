@@ -10,3 +10,6 @@
 [submodule "dep/spdlog"]
 	path = dep/spdlog
 	url = https://github.com/gabime/spdlog
+[submodule "dep/stb/stb"]
+	path = dep/stb/stb
+	url = https://github.com/nothings/stb
