@@ -66,9 +66,10 @@ private:
     void SetupDebugMessenger();
     void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
         VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& buffer_memory) const;
-    void CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size);
-    void CopyBufferToImage(VkBuffer src, VkImage image, ui32 width, ui32 height);
-    void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout);
+
+    void CopyBuffer(VkCommandBuffer command_buffer, VkBuffer src, VkBuffer dst, VkDeviceSize size);
+    void CopyBufferToImage(VkCommandBuffer command_buffer, VkBuffer src, VkImage image, ui32 width, ui32 height);
+    void TransitionImageLayout(VkCommandBuffer command_buffer, VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout);
 
     VkCommandBuffer BeginSingleTimeCommands();
     void EndSingleTimeCommands(VkCommandBuffer command_buffer);
@@ -115,6 +116,8 @@ private:
     void CreateImage(ui32 width, ui32 height, VkFormat format, VkImageTiling tiling,
         VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& image_memory);
 
+    VkImageView CreateImageView(VkImage image, VkFormat format);
+
 private:
     VkAnnotate annotate_;
     std::filesystem::path executable_file_;
@@ -135,6 +138,7 @@ private:
     std::unique_ptr<PhysicalDeviceInfo> device_info_;
     VkImage texture_image_ = nullptr;
     VkDeviceMemory texture_image_memory_ = nullptr;
+    VkImageView texture_image_view_ = nullptr;
     VkDeviceMemory vertex_buffer_memory_ = nullptr;
     VkBuffer vertex_buffer_ = nullptr;
     VkDeviceMemory index_buffer_memory_ = nullptr;

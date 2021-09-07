@@ -381,15 +381,15 @@ void Application::CreateSwapChain()
         image_count = surface_info_->capabilities.maxImageCount;
     }
 
-    VkSwapchainCreateInfoKHR createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    createInfo.surface = surface_;
-    createInfo.minImageCount = image_count;
-    createInfo.imageFormat = surfaceFormat.format;
-    createInfo.imageColorSpace = surfaceFormat.colorSpace;
-    createInfo.imageExtent = swap_chain_extent_;
-    createInfo.imageArrayLayers = 1;
-    createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    VkSwapchainCreateInfoKHR create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    create_info.surface = surface_;
+    create_info.minImageCount = image_count;
+    create_info.imageFormat = surfaceFormat.format;
+    create_info.imageColorSpace = surfaceFormat.colorSpace;
+    create_info.imageExtent = swap_chain_extent_;
+    create_info.imageArrayLayers = 1;
+    create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
     std::array queueFamilyIndices =
     {
@@ -399,24 +399,24 @@ void Application::CreateSwapChain()
 
     if (queueFamilyIndices[0] != queueFamilyIndices[1])
     {
-        createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-        createInfo.queueFamilyIndexCount = static_cast<ui32>(queueFamilyIndices.size());
-        createInfo.pQueueFamilyIndices = queueFamilyIndices.data();
+        create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+        create_info.queueFamilyIndexCount = static_cast<ui32>(queueFamilyIndices.size());
+        create_info.pQueueFamilyIndices = queueFamilyIndices.data();
     }
     else
     {
-        createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        createInfo.queueFamilyIndexCount = 0; // Optional
-        createInfo.pQueueFamilyIndices = nullptr; // Optional
+        create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        create_info.queueFamilyIndexCount = 0; // Optional
+        create_info.pQueueFamilyIndices = nullptr; // Optional
     }
 
-    createInfo.preTransform = surface_info_->capabilities.currentTransform;
-    createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    createInfo.presentMode = presentMode;
-    createInfo.clipped = VK_TRUE;
-    createInfo.oldSwapchain = VK_NULL_HANDLE;
+    create_info.preTransform = surface_info_->capabilities.currentTransform;
+    create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    create_info.presentMode = presentMode;
+    create_info.clipped = VK_TRUE;
+    create_info.oldSwapchain = VK_NULL_HANDLE;
 
-    VkWrap(vkCreateSwapchainKHR)(device_, &createInfo, nullptr, &swap_chain_);
+    VkWrap(vkCreateSwapchainKHR)(device_, &create_info, nullptr, &swap_chain_);
 
     VulkanUtility::GetSwapChainImages(device_, swap_chain_, swap_chain_images_);
     swap_chain_image_format_ = surfaceFormat.format;
@@ -428,25 +428,7 @@ void Application::CreateSwapChainImageViews()
     swap_chain_image_views_.resize(num_images);
     for (size_t i = 0; i != num_images; i++)
     {
-        const VkImage image = swap_chain_images_[i];
-        VkImageView& image_view = swap_chain_image_views_[i];
-
-        VkImageViewCreateInfo createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        createInfo.image = image;
-        createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        createInfo.format = swap_chain_image_format_;
-        createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-        createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        createInfo.subresourceRange.baseMipLevel = 0;
-        createInfo.subresourceRange.levelCount = 1;
-        createInfo.subresourceRange.baseArrayLayer = 0;
-        createInfo.subresourceRange.layerCount = 1;
-
-        VkWrap(vkCreateImageView)(device_, &createInfo, nullptr, &image_view);
+        swap_chain_image_views_[i] = CreateImageView(swap_chain_images_[i], swap_chain_image_format_);
     }
 }
 
@@ -729,12 +711,17 @@ void Application::CreateTextureImages()
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         texture_image_, texture_image_memory_);
 
-    TransitionImageLayout(texture_image_, image_format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    CopyBufferToImage(staging_buffer, texture_image_, image.GetWidth(), image.GetHeight());
-    TransitionImageLayout(texture_image_, image_format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    ExecuteSingleTimeCommands([&](VkCommandBuffer command_buffer)
+    {
+        TransitionImageLayout(command_buffer, texture_image_, image_format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        CopyBufferToImage(command_buffer, staging_buffer, texture_image_, image.GetWidth(), image.GetHeight());
+        TransitionImageLayout(command_buffer, texture_image_, image_format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    });
 
     VulkanUtility::Destroy<vkDestroyBuffer>(device_, staging_buffer);
     VulkanUtility::FreeMemory(device_, staging_buffer_memory);
+
+    texture_image_view_ = CreateImageView(texture_image_, image_format);
 }
 
 VkCommandBuffer Application::BeginSingleTimeCommands()
@@ -850,86 +837,77 @@ void Application::CreateDescriptorSets()
     }
 }
 
-void Application::CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size)
+void Application::CopyBuffer(VkCommandBuffer command_buffer, VkBuffer src, VkBuffer dst, VkDeviceSize size)
 {
-    ExecuteSingleTimeCommands([&](VkCommandBuffer command_buffer)
-    {
-        VkBufferCopy copy_region{};
-        copy_region.size = size;
-        vkCmdCopyBuffer(command_buffer, src, dst, 1, &copy_region);
-    });
+    VkBufferCopy copy_region{};
+    copy_region.size = size;
+    vkCmdCopyBuffer(command_buffer, src, dst, 1, &copy_region);
 }
 
-void Application::CopyBufferToImage(VkBuffer src, VkImage image, ui32 width, ui32 height)
+void Application::CopyBufferToImage(VkCommandBuffer command_buffer, VkBuffer src, VkImage image, ui32 width, ui32 height)
 {
-    ExecuteSingleTimeCommands([&](VkCommandBuffer command_buffer)
-    {
-        VkBufferImageCopy region{};
-        region.bufferOffset = 0;
-        region.bufferRowLength = 0;
-        region.bufferImageHeight = 0;
+    VkBufferImageCopy region{};
+    region.bufferOffset = 0;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
 
-        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        region.imageSubresource.mipLevel = 0;
-        region.imageSubresource.baseArrayLayer = 0;
-        region.imageSubresource.layerCount = 1;
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
 
-        region.imageOffset = {0,0,0};
-        region.imageExtent = {width, height, 1};
+    region.imageOffset = {0,0,0};
+    region.imageExtent = {width, height, 1};
 
-        vkCmdCopyBufferToImage(command_buffer, src, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-    });
+    vkCmdCopyBufferToImage(command_buffer, src, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 }
 
-void Application::TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout)
+void Application::TransitionImageLayout(VkCommandBuffer command_buffer, VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout)
 {
     UnusedVar(format);
-    ExecuteSingleTimeCommands([&](VkCommandBuffer command_buffer)
+    VkImageMemoryBarrier barrier {};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = old_layout;
+    barrier.newLayout = new_layout;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.srcAccessMask = 0; //TODO
+    barrier.dstAccessMask = 0; //TODO
+
+    VkPipelineStageFlags source_stage;
+    VkPipelineStageFlags destination_stage;
+
+    if(old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
     {
-        VkImageMemoryBarrier barrier {};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.oldLayout = old_layout;
-        barrier.newLayout = new_layout;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = image;
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseMipLevel = 0;
-        barrier.subresourceRange.levelCount = 1;
-        barrier.subresourceRange.layerCount = 1;
-        barrier.srcAccessMask = 0; //TODO
-        barrier.dstAccessMask = 0; //TODO
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        destination_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    }
+    else if(old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+    {
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        source_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        destination_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    }
+    else
+    {
+        throw std::invalid_argument("unsupported layout transition");
+    }
 
-        VkPipelineStageFlags source_stage;
-        VkPipelineStageFlags destination_stage;
-
-        if(old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-        {
-            barrier.srcAccessMask = 0;
-            barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-            destination_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        }
-        else if(old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-        {
-            barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            source_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-            destination_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        }
-        else
-        {
-            throw std::invalid_argument("unsupported layout transition");
-        }
-
-        vkCmdPipelineBarrier(command_buffer,
-            source_stage, // in which pipeline stage the operations occur that should happen before barrier
-            destination_stage, // the pipeline stage in which operations will wait on the barrier
-            0, // 0 or VK_DEPENDENCY_BY_REGION_BIT
-            0, nullptr, // memory barriers
-            0, nullptr, // buffer memory barriers
-            1, &barrier); // image memory barriers
-    });
+    vkCmdPipelineBarrier(command_buffer,
+        source_stage, // in which pipeline stage the operations occur that should happen before barrier
+        destination_stage, // the pipeline stage in which operations will wait on the barrier
+        0, // 0 or VK_DEPENDENCY_BY_REGION_BIT
+        0, nullptr, // memory barriers
+        0, nullptr, // buffer memory barriers
+        1, &barrier); // image memory barriers
 }
 
 void Application::CreateCommandBuffers()
@@ -1241,6 +1219,7 @@ void Application::Cleanup()
 
     using Vk = VulkanUtility;
 
+    Vk::Destroy<vkDestroyImageView>(device_, texture_image_view_);
     Vk::Destroy<vkDestroyImage>(device_, texture_image_);
     Vk::FreeMemory(device_, texture_image_memory_);
 
@@ -1367,7 +1346,10 @@ void Application::CreateGpuBufferRaw(const void* data, VkDeviceSize buffer_size,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         buffer, buffer_memory);
 
-    CopyBuffer(staging_buffer, buffer, buffer_size);
+    ExecuteSingleTimeCommands([&](VkCommandBuffer command_buffer)
+    {
+        CopyBuffer(command_buffer, staging_buffer, buffer, buffer_size);
+    });
 
     VulkanUtility::Destroy<vkDestroyBuffer>(device_, staging_buffer);
     VulkanUtility::FreeMemory(device_, staging_buffer_memory);
@@ -1446,4 +1428,26 @@ void Application::CreateSyncObjects()
     render_finished_semaphores_ = make_n(kMaxFramesInFlight, make_semaphore);
     in_flight_fences_ = make_n(kMaxFramesInFlight, make_fence);
     images_in_flight_.resize(swap_chain_image_views_.size(), VK_NULL_HANDLE);
+}
+
+VkImageView Application::CreateImageView(VkImage image, VkFormat format)
+{
+    VkImageViewCreateInfo create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    create_info.image = image;
+    create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    create_info.format = format;
+    create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+    create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    create_info.subresourceRange.baseMipLevel = 0;
+    create_info.subresourceRange.levelCount = 1;
+    create_info.subresourceRange.baseArrayLayer = 0;
+    create_info.subresourceRange.layerCount = 1;
+
+    VkImageView image_view = nullptr;
+    VkWrap(vkCreateImageView)(device_, &create_info, nullptr, &image_view);
+    return image_view;
 }
