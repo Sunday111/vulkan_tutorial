@@ -346,6 +346,7 @@ void Application::CreateDevice()
     add_queue_family(device_info_->GetPresentQueueFamilyIndex());
 
     VkPhysicalDeviceFeatures device_features{};
+    device_features.samplerAnisotropy = device_info_->features.samplerAnisotropy;
 
     VkDeviceCreateInfo device_create_info{};
     device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -354,6 +355,7 @@ void Application::CreateDevice()
     device_create_info.pEnabledFeatures = &device_features;
     device_create_info.enabledLayerCount = 0; // need to specify them in instance only
     device_create_info.enabledExtensionCount = static_cast<ui32>(device_extensions_.size());
+
     if (!device_extensions_.empty())
     {
         device_create_info.ppEnabledExtensionNames = device_extensions_.data();
@@ -693,35 +695,62 @@ void Application::CreateImage(ui32 width, ui32 height, VkFormat format, VkImageT
 
 void Application::CreateTextureImages()
 {
-    VkBuffer staging_buffer = nullptr;
-    VkDeviceMemory staging_buffer_memory = nullptr;
-
-    const StbImage image((GetTexturesDir() / "statue.jpg").string());
-    const auto image_data = image.GetData();
-    CreateBuffer(image_data.size(),
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        staging_buffer, staging_buffer_memory);
-    VulkanUtility::MapCopyUnmap(image_data.data(), image_data.size(), device_, staging_buffer_memory);
-
     constexpr VkFormat image_format = VK_FORMAT_R8G8B8A8_SRGB;
-    CreateImage(image.GetWidth(), image.GetHeight(),
-        image_format, VK_IMAGE_TILING_OPTIMAL,
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        texture_image_, texture_image_memory_);
 
-    ExecuteSingleTimeCommands([&](VkCommandBuffer command_buffer)
+    // read texture from file, create image and device memory
     {
-        TransitionImageLayout(command_buffer, texture_image_, image_format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-        CopyBufferToImage(command_buffer, staging_buffer, texture_image_, image.GetWidth(), image.GetHeight());
-        TransitionImageLayout(command_buffer, texture_image_, image_format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    });
+        VkBuffer staging_buffer = nullptr;
+        VkDeviceMemory staging_buffer_memory = nullptr;
 
-    VulkanUtility::Destroy<vkDestroyBuffer>(device_, staging_buffer);
-    VulkanUtility::FreeMemory(device_, staging_buffer_memory);
+        const StbImage image((GetTexturesDir() / "statue.jpg").string());
+        const auto image_data = image.GetData();
+        CreateBuffer(image_data.size(),
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            staging_buffer, staging_buffer_memory);
+        VulkanUtility::MapCopyUnmap(image_data.data(), image_data.size(), device_, staging_buffer_memory);
 
+        CreateImage(image.GetWidth(), image.GetHeight(),
+            image_format, VK_IMAGE_TILING_OPTIMAL,
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            texture_image_, texture_image_memory_);
+
+        ExecuteSingleTimeCommands([&](VkCommandBuffer command_buffer)
+        {
+            TransitionImageLayout(command_buffer, texture_image_, image_format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            CopyBufferToImage(command_buffer, staging_buffer, texture_image_, image.GetWidth(), image.GetHeight());
+            TransitionImageLayout(command_buffer, texture_image_, image_format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        });
+
+        VulkanUtility::Destroy<vkDestroyBuffer>(device_, staging_buffer);
+        VulkanUtility::FreeMemory(device_, staging_buffer_memory);
+    }
+
+    // create image view
     texture_image_view_ = CreateImageView(texture_image_, image_format);
+
+    // create texture sampler
+    {
+        VkSamplerCreateInfo sampler_info {};
+        sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        sampler_info.magFilter = VK_FILTER_LINEAR; // oversampling
+        sampler_info.minFilter = VK_FILTER_LINEAR; // undersampling
+        sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler_info.anisotropyEnable = device_info_->features.samplerAnisotropy;
+        sampler_info.maxAnisotropy = device_info_->properties.limits.maxSamplerAnisotropy;
+        sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+        sampler_info.unnormalizedCoordinates = VK_FALSE;
+        sampler_info.compareEnable = VK_FALSE;
+        sampler_info.compareOp = VK_COMPARE_OP_ALWAYS;
+        sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        sampler_info.mipLodBias = 0.0f;
+        sampler_info.minLod = 0.0f;
+        sampler_info.maxLod = 0.0f;
+        VkWrap(vkCreateSampler)(device_, &sampler_info, nullptr, &texture_sampler_);
+    }
 }
 
 VkCommandBuffer Application::BeginSingleTimeCommands()
@@ -1219,6 +1248,7 @@ void Application::Cleanup()
 
     using Vk = VulkanUtility;
 
+    Vk::Destroy<vkDestroySampler>(device_, texture_sampler_);
     Vk::Destroy<vkDestroyImageView>(device_, texture_image_view_);
     Vk::Destroy<vkDestroyImage>(device_, texture_image_);
     Vk::FreeMemory(device_, texture_image_memory_);

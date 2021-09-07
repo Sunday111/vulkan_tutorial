@@ -96,5 +96,10 @@ void PhysicalDeviceInfo::PopulateIndexCache(VkSurfaceKHR surface)
         score += 1000;
     }
 
+    if(features.samplerAnisotropy)
+    {
+        score += 100;
+    }
+
     return score;
 }

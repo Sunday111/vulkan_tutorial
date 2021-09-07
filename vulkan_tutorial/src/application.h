@@ -139,6 +139,7 @@ private:
     VkImage texture_image_ = nullptr;
     VkDeviceMemory texture_image_memory_ = nullptr;
     VkImageView texture_image_view_ = nullptr;
+    VkSampler texture_sampler_ = nullptr;
     VkDeviceMemory vertex_buffer_memory_ = nullptr;
     VkBuffer vertex_buffer_ = nullptr;
     VkDeviceMemory index_buffer_memory_ = nullptr;
