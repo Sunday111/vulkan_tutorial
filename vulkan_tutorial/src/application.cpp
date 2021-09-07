@@ -24,6 +24,88 @@
 
 #include "stb/stb_image.h"
 
+class StbImage
+{
+public:
+    StbImage() = default;
+    StbImage(const std::string_view& path)
+    {
+        LoadFromFile(path);
+    }
+
+    StbImage(StbImage&& another)
+    {
+        MoveFrom(another);
+    }
+
+    StbImage& operator=(StbImage&& another)
+    {
+        Destroy();
+        MoveFrom(another);
+        return *this;
+    }
+
+    ~StbImage()
+    {
+        Destroy();
+    }
+
+    void LoadFromFile(const std::string_view& path)
+    {
+        Destroy();
+        pixel_data_ = stbi_load(path.data(), &width_, &height_, &channels_, STBI_rgb_alpha);
+
+        [[unlikely]]
+        if(!pixel_data_)
+        {
+            throw std::runtime_error(fmt::format("Failed to load texture from file {}", path));
+        }
+    }
+
+    void Destroy()
+    {
+        if(pixel_data_)
+        {
+            stbi_image_free(pixel_data_);
+            Reset();
+        }
+    }
+
+    void Reset()
+    {
+        pixel_data_ = nullptr;
+        width_ = -1;
+        height_ = -1;
+        channels_ = -1;
+    }
+
+    [[nodiscard]] ui32 GetWidth() const noexcept { return static_cast<ui32>(width_); }
+    [[nodiscard]] ui32 GetHeight() const noexcept { return static_cast<ui32>(height_); }
+    [[nodiscard]] ui32 GetChannels() const noexcept { return 4; }
+    [[nodiscard]] size_t GetSize() const noexcept { return GetWidth() * GetHeight() * GetChannels(); }
+    [[nodiscard]] std::span<const stbi_uc> GetData() const noexcept
+    {
+        return std::span( pixel_data_, pixel_data_ + GetSize() );
+    }
+
+private:
+    StbImage(const StbImage&) = default;
+    StbImage& operator=(const StbImage&) = default;
+
+    void MoveFrom(StbImage& another)
+    {
+        *this = another;
+        another.Reset();
+    }
+
+private:
+    stbi_uc* pixel_data_ = nullptr;
+    int width_ = -1;
+    int height_ = -1;
+    int channels_ = -1;
+};
+
+
 static VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {
     auto func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
     if (func != nullptr) {
@@ -596,6 +678,99 @@ void Application::CreateCommandPools()
     transient_command_pool_ = CreateCommandPool(device_info_->GetGraphicsQueueFamilyIndex(), VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
 }
 
+void Application::CreateImage(ui32 width, ui32 height, VkFormat format, VkImageTiling tiling,
+    VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& image_memory)
+{
+    VkImageCreateInfo image_info {};
+    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.extent.width = width;
+    image_info.extent.height = height;
+    image_info.extent.depth = 1;
+    image_info.mipLevels = 1;
+    image_info.arrayLayers = 1;
+    image_info.format = format;
+    image_info.tiling = tiling;
+    image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    image_info.usage = usage;
+    image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.flags = 0;
+    VkWrap(vkCreateImage)(device_, &image_info, nullptr, &image);
+
+    VkMemoryRequirements memory_requirements {};
+    vkGetImageMemoryRequirements(device_, image, &memory_requirements);
+
+    VkMemoryAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.allocationSize = memory_requirements.size;
+    alloc_info.memoryTypeIndex = device_info_->GetMemoryTypeIndex(memory_requirements.memoryTypeBits, properties);
+    VkWrap(vkAllocateMemory)(device_, &alloc_info, nullptr, &image_memory);
+    VkWrap(vkBindImageMemory)(device_, image, image_memory, 0);
+}
+
+void Application::CreateTextureImages()
+{
+    VkBuffer staging_buffer = nullptr;
+    VkDeviceMemory staging_buffer_memory = nullptr;
+
+    const StbImage image((GetTexturesDir() / "statue.jpg").string());
+    const auto image_data = image.GetData();
+    CreateBuffer(image_data.size(),
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        staging_buffer, staging_buffer_memory);
+    VulkanUtility::MapCopyUnmap(image_data.data(), image_data.size(), device_, staging_buffer_memory);
+
+    constexpr VkFormat image_format = VK_FORMAT_R8G8B8A8_SRGB;
+    CreateImage(image.GetWidth(), image.GetHeight(),
+        image_format, VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        texture_image_, texture_image_memory_);
+
+    TransitionImageLayout(texture_image_, image_format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    CopyBufferToImage(staging_buffer, texture_image_, image.GetWidth(), image.GetHeight());
+    TransitionImageLayout(texture_image_, image_format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    VulkanUtility::Destroy<vkDestroyBuffer>(device_, staging_buffer);
+    VulkanUtility::FreeMemory(device_, staging_buffer_memory);
+}
+
+VkCommandBuffer Application::BeginSingleTimeCommands()
+{
+    VkCommandBufferAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    alloc_info.commandPool = transient_command_pool_;
+    alloc_info.commandBufferCount = 1;
+
+    VkCommandBuffer command_buffer{};
+    VkWrap(vkAllocateCommandBuffers)(device_, &alloc_info, &command_buffer);
+
+    VkCommandBufferBeginInfo begin_info{};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    VkWrap(vkBeginCommandBuffer)(command_buffer, &begin_info);
+
+    return command_buffer;
+}
+
+void Application::EndSingleTimeCommands(VkCommandBuffer command_buffer)
+{
+    VkWrap(vkEndCommandBuffer)(command_buffer);
+    VkSubmitInfo submit_info{};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &command_buffer;
+
+    VkWrap(vkQueueSubmit)(graphics_queue_, 1, &submit_info, nullptr);
+    VkWrap(vkQueueWaitIdle)(graphics_queue_);
+
+    vkFreeCommandBuffers(device_, transient_command_pool_, 1, &command_buffer);
+}
+
 void Application::CreateVertexBuffers()
 {
     CreateGpuBuffer(std::span(vertices), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, vertex_buffer_, vertex_buffer_memory_);
@@ -677,33 +852,84 @@ void Application::CreateDescriptorSets()
 
 void Application::CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size)
 {
-    VkCommandBufferAllocateInfo alloc_info{};
-    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    alloc_info.commandPool = transient_command_pool_;
-    alloc_info.commandBufferCount = 1;
+    ExecuteSingleTimeCommands([&](VkCommandBuffer command_buffer)
+    {
+        VkBufferCopy copy_region{};
+        copy_region.size = size;
+        vkCmdCopyBuffer(command_buffer, src, dst, 1, &copy_region);
+    });
+}
 
-    VkCommandBuffer command_buffer = nullptr;
-    VkWrap(vkAllocateCommandBuffers)(device_, &alloc_info, &command_buffer);
+void Application::CopyBufferToImage(VkBuffer src, VkImage image, ui32 width, ui32 height)
+{
+    ExecuteSingleTimeCommands([&](VkCommandBuffer command_buffer)
+    {
+        VkBufferImageCopy region{};
+        region.bufferOffset = 0;
+        region.bufferRowLength = 0;
+        region.bufferImageHeight = 0;
 
-    VkCommandBufferBeginInfo begin_info{};
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    VkWrap(vkBeginCommandBuffer)(command_buffer, &begin_info);
+        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.imageSubresource.mipLevel = 0;
+        region.imageSubresource.baseArrayLayer = 0;
+        region.imageSubresource.layerCount = 1;
 
-    VkBufferCopy copy_region{};
-    copy_region.size = size;
-    vkCmdCopyBuffer(command_buffer, src, dst, 1, &copy_region);
+        region.imageOffset = {0,0,0};
+        region.imageExtent = {width, height, 1};
 
-    VkWrap(vkEndCommandBuffer)(command_buffer);
+        vkCmdCopyBufferToImage(command_buffer, src, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    });
+}
 
-    VkSubmitInfo submit_info{};
-    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &command_buffer;
-    VkWrap(vkQueueSubmit)(graphics_queue_, 1, &submit_info, nullptr);
-    VkWrap(vkQueueWaitIdle)(graphics_queue_);
-    vkFreeCommandBuffers(device_, transient_command_pool_, 1, &command_buffer);
+void Application::TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout)
+{
+    UnusedVar(format);
+    ExecuteSingleTimeCommands([&](VkCommandBuffer command_buffer)
+    {
+        VkImageMemoryBarrier barrier {};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = old_layout;
+        barrier.newLayout = new_layout;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = image;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = 0; //TODO
+        barrier.dstAccessMask = 0; //TODO
+
+        VkPipelineStageFlags source_stage;
+        VkPipelineStageFlags destination_stage;
+
+        if(old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+        {
+            barrier.srcAccessMask = 0;
+            barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+            destination_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        }
+        else if(old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+        {
+            barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            source_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+            destination_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        }
+        else
+        {
+            throw std::invalid_argument("unsupported layout transition");
+        }
+
+        vkCmdPipelineBarrier(command_buffer,
+            source_stage, // in which pipeline stage the operations occur that should happen before barrier
+            destination_stage, // the pipeline stage in which operations will wait on the barrier
+            0, // 0 or VK_DEPENDENCY_BY_REGION_BIT
+            0, nullptr, // memory barriers
+            0, nullptr, // buffer memory barriers
+            1, &barrier); // image memory barriers
+    });
 }
 
 void Application::CreateCommandBuffers()
@@ -824,6 +1050,7 @@ void Application::InitializeVulkan()
     CreateGraphicsPipeline();
     CreateFrameBuffers();
     CreateCommandPools();
+    CreateTextureImages();
     CreateVertexBuffers();
     CreateIndexBuffers();
     CreateUniformBuffers();
@@ -1014,6 +1241,9 @@ void Application::Cleanup()
 
     using Vk = VulkanUtility;
 
+    Vk::Destroy<vkDestroyImage>(device_, texture_image_);
+    Vk::FreeMemory(device_, texture_image_memory_);
+
     Vk::Destroy<vkDestroyDescriptorSetLayout>(device_, descriptor_set_layout_);
 
     Vk::Destroy<vkDestroyBuffer>(device_, vertex_buffer_);
@@ -1113,6 +1343,10 @@ std::filesystem::path Application::GetShadersDir() const noexcept
     return executable_file_.parent_path() / "shaders";
 }
 
+std::filesystem::path Application::GetTexturesDir() const noexcept
+{
+    return executable_file_.parent_path() / "textures";
+}
 
 void Application::CreateGpuBufferRaw(const void* data, VkDeviceSize buffer_size,
     VkBufferUsageFlags usage_flags, VkBuffer& buffer, VkDeviceMemory& buffer_memory)

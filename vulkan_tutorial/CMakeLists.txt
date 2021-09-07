@@ -2,13 +2,15 @@ cmake_minimum_required(VERSION 3.20)
 
 set(target_name vulkan_tutorial)
 
-set(target_src_root ${CMAKE_CURRENT_SOURCE_DIR}/src/)
-file(GLOB_RECURSE source_list "${target_src_root}/*.cpp")
+set(target_src_root ${CMAKE_CURRENT_SOURCE_DIR}/src)
+set(target_shaders_root ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
+set(target_textures_root ${CMAKE_CURRENT_SOURCE_DIR}/textures)
 
-set(target_shader_root ${CMAKE_CURRENT_SOURCE_DIR}/shaders/)
-file(GLOB_RECURSE shader_list "${target_shader_root}/**")
+file(GLOB_RECURSE sources_list "${target_src_root}/*.cpp")
+file(GLOB_RECURSE shaders_list RELATIVE ${target_shaders_root} "${target_shaders_root}/**")
+file(GLOB_RECURSE textures_list RELATIVE ${target_textures_root} "${target_textures_root}/**" )
 
-add_executable(${target_name} ${source_list})
+add_executable(${target_name} ${sources_list})
 target_link_libraries(${target_name} glfw fmt stb glm spdlog Vulkan::Vulkan)
 target_compile_definitions(${target_name} PUBLIC
 	-DGLFW_INCLUDE_VULKAN
@@ -27,14 +29,39 @@ else()
   target_compile_options(${target_name} PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
 
-# compile shaders on pre build step
-foreach(shader_file ${shader_list})
-	get_filename_component(shader_name ${shader_file} NAME_WE)
-	set(compiled_shader shaders/${shader_name}.spv)
+# compile shaders
+add_custom_target(compile_shaders)
+foreach(shader_src_rel ${shaders_list})
+	set(shader_src_abs ${CMAKE_CURRENT_SOURCE_DIR}/shaders/${shader_src_rel})
+	get_filename_component(shader_src_name ${shader_src_rel} NAME_WE)
+	get_filename_component(shader_src_dir ${shader_src_rel} DIRECTORY)
+	set(shader_dst_abs ${CMAKE_CURRENT_BINARY_DIR}/shaders/${shader_src_dir}/${shader_src_name}.spv)
+
+	# create desctination directory
+	get_filename_component(shader_dst_dir ${shader_dst_abs} DIRECTORY)
+	file(MAKE_DIRECTORY ${shader_dst_dir})
+
 	add_custom_command(
-		TARGET ${target_name} PRE_BUILD
-		COMMAND ${Vulkan_GLSLC_EXECUTABLE} ${shader_file} -o ${compiled_shader}
-		WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-		BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/${compiled_shader}
+		TARGET compile_shaders
+		COMMAND ${Vulkan_GLSLC_EXECUTABLE} ${shader_src_abs} -o ${shader_dst_abs}
+		MAIN_DEPENDENCY ${shader_dst_abs}
 	)
 endforeach()
+
+# copy textures
+add_custom_target(copy_textures)
+foreach(texture_src_rel ${textures_list})
+	set(texture_src_abs ${target_textures_root}/${texture_src_rel})
+	set(texture_dst_abs ${CMAKE_CURRENT_BINARY_DIR}/textures/${texture_src_rel})
+
+	# create desctination directory
+	get_filename_component(texture_dst_dir ${texture_dst_abs} DIRECTORY)
+	file(MAKE_DIRECTORY ${texture_dst_dir})
+
+	add_custom_command(
+		TARGET copy_textures
+		COMMAND ${CMAKE_COMMAND} -E copy ${texture_src_abs} ${texture_dst_abs}
+		MAIN_DEPENDENCY ${texture_src})
+endforeach()
+
+add_dependencies(${target_name} compile_shaders copy_textures)

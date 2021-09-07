@@ -51,6 +51,7 @@ private:
     void CreateFrameBuffers();
     [[nodiscard]] VkCommandPool CreateCommandPool(ui32 queue_family_index, VkCommandPoolCreateFlags flags = 0) const;
     void CreateCommandPools();
+    void CreateTextureImages();
     void CreateVertexBuffers();
     void CreateIndexBuffers();
     void CreateUniformBuffers();
@@ -66,6 +67,19 @@ private:
     void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
         VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& buffer_memory) const;
     void CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size);
+    void CopyBufferToImage(VkBuffer src, VkImage image, ui32 width, ui32 height);
+    void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout);
+
+    VkCommandBuffer BeginSingleTimeCommands();
+    void EndSingleTimeCommands(VkCommandBuffer command_buffer);
+    
+    template<typename T>
+    void ExecuteSingleTimeCommands(T&& visitor)
+    {
+        const VkCommandBuffer command_buffer = BeginSingleTimeCommands();
+        visitor(command_buffer);
+        EndSingleTimeCommands(command_buffer);
+    }
 
     void InitializeWindow();
     static void FrameBufferResizeCallback(GLFWwindow* window, int width, int height);
@@ -82,6 +96,7 @@ private:
     VkExtent2D ChooseSwapExtent() const;
     std::vector<const char*> GetRequiredExtensions();
     [[nodiscard]] std::filesystem::path GetShadersDir() const noexcept;
+    [[nodiscard]] std::filesystem::path GetTexturesDir() const noexcept;
 
     void CreateGpuBufferRaw(const void* data, VkDeviceSize buffer_size,
         VkBufferUsageFlags usage_flags, VkBuffer& buffer, VkDeviceMemory& buffer_memory);
@@ -96,6 +111,9 @@ private:
 
     [[nodiscard]] static TimePoint GetGlobalTime() noexcept { return std::chrono::high_resolution_clock::now(); }
     [[nodiscard]] auto GetTimeSinceAppStart() const noexcept { return GetGlobalTime() - app_start_time_; }
+
+    void CreateImage(ui32 width, ui32 height, VkFormat format, VkImageTiling tiling,
+        VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& image_memory);
 
 private:
     VkAnnotate annotate_;
@@ -115,6 +133,8 @@ private:
     std::vector<VkDescriptorSet> descriptor_sets_;
     std::unique_ptr<DeviceSurfaceInfo> surface_info_;
     std::unique_ptr<PhysicalDeviceInfo> device_info_;
+    VkImage texture_image_ = nullptr;
+    VkDeviceMemory texture_image_memory_ = nullptr;
     VkDeviceMemory vertex_buffer_memory_ = nullptr;
     VkBuffer vertex_buffer_ = nullptr;
     VkDeviceMemory index_buffer_memory_ = nullptr;
