@@ -123,10 +123,10 @@ static void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMesse
 }
 
 static const std::vector<Vertex> vertices = {
-    {{-0.5f, -0.5f}, { 1.0f, 0.0f, 0.0f}},
-    {{ 0.5f, -0.5f}, { 0.0f, 1.0f, 0.0f}},
-    {{ 0.5f,  0.5f}, { 0.0f, 0.0f, 1.0f}},
-    {{-0.5f,  0.5f}, { 1.0f, 1.0f, 1.0f}}
+    {{-0.5f, -0.5f}, { 1.0f, 0.0f, 0.0f}, { 1.0f, 0.0f }},
+    {{ 0.5f, -0.5f}, { 0.0f, 1.0f, 0.0f}, { 0.0f, 0.0f }},
+    {{ 0.5f,  0.5f}, { 0.0f, 0.0f, 1.0f}, { 0.0f, 1.0f }},
+    {{-0.5f,  0.5f}, { 1.0f, 1.0f, 1.0f}, { 1.0f, 1.0f }}
 };
 
 const std::vector<ui16> indices = {
@@ -484,10 +484,19 @@ void Application::CreateDescriptorSetLayout()
     ubo_layout_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     ubo_layout_binding.pImmutableSamplers = nullptr;
 
+    VkDescriptorSetLayoutBinding sampler_layout_binding {};
+    sampler_layout_binding.binding = 1;
+    sampler_layout_binding.descriptorCount = 1;
+    sampler_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    sampler_layout_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    sampler_layout_binding.pImmutableSamplers = nullptr;
+
+    const std::array bindings {ubo_layout_binding, sampler_layout_binding};    
+
     VkDescriptorSetLayoutCreateInfo create_info {};
     create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    create_info.bindingCount = 1;
-    create_info.pBindings = &ubo_layout_binding;
+    create_info.bindingCount = static_cast<ui32>(bindings.size());
+    create_info.pBindings = bindings.data();
 
     VkWrap(vkCreateDescriptorSetLayout)(device_, &create_info, nullptr, &descriptor_set_layout_);
 }
@@ -815,11 +824,11 @@ void Application::CreateUniformBuffers()
 
 void Application::CreateDescriptorPool()
 {
-    VkDescriptorPoolSize pool_size {};
-    pool_size.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    pool_size.descriptorCount = static_cast<ui32>(swap_chain_images_.size());
-
-    std::array pool_sizes = { pool_size };
+    std::array<VkDescriptorPoolSize, 2> pool_sizes {};
+    pool_sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    pool_sizes[0].descriptorCount = static_cast<ui32>(swap_chain_images_.size());
+    pool_sizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    pool_sizes[1].descriptorCount = static_cast<ui32>(swap_chain_images_.size());
 
     VkDescriptorPoolCreateInfo pool_info {};
     pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -846,23 +855,33 @@ void Application::CreateDescriptorSets()
 
     for(ui32 i = 0; i < num_descriptor_sets; ++i)
     {
+        std::array<VkWriteDescriptorSet, 2> wds {};
+
         VkDescriptorBufferInfo buffer_info {};
         buffer_info.buffer = uniform_buffers_[i];
         buffer_info.offset = 0;
         buffer_info.range = sizeof(UniformBufferObject);
+        wds[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        wds[0].dstSet = descriptor_sets_[i];
+        wds[0].dstBinding = 0;
+        wds[0].dstArrayElement = 0;
+        wds[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        wds[0].descriptorCount = 1;
+        wds[0].pBufferInfo = &buffer_info;
 
-        VkWriteDescriptorSet descriptor_set_write{};
-        descriptor_set_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptor_set_write.dstSet = descriptor_sets_[i];
-        descriptor_set_write.dstBinding = 0;
-        descriptor_set_write.dstArrayElement = 0;
-        descriptor_set_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptor_set_write.descriptorCount = 1;
-        descriptor_set_write.pBufferInfo = &buffer_info;
-        descriptor_set_write.pImageInfo = nullptr; // Optional
-        descriptor_set_write.pTexelBufferView = nullptr; // Optional
+        VkDescriptorImageInfo image_info {};
+        image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        image_info.imageView = texture_image_view_;
+        image_info.sampler = texture_sampler_;
+        wds[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        wds[1].dstSet = descriptor_sets_[i];
+        wds[1].dstBinding = 1;
+        wds[1].dstArrayElement = 0;
+        wds[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        wds[1].descriptorCount = 1;
+        wds[1].pImageInfo = &image_info;
 
-        vkUpdateDescriptorSets(device_, 1, &descriptor_set_write, 0, nullptr);
+        vkUpdateDescriptorSets(device_, static_cast<ui32>(wds.size()), wds.data(), 0, nullptr);
     }
 }
 

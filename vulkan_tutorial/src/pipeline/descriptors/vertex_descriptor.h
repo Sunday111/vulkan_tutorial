@@ -14,16 +14,14 @@ struct StructDescriptor<Vertex>
     static constexpr std::array<VkVertexInputBindingDescription, 1> GetBindingDescription() noexcept
     {
         VkVertexInputBindingDescription binding_description{};
-
         binding_description.binding = 0;
         binding_description.stride = sizeof(Vertex);
         binding_description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
         return std::array{ binding_description };
     }
 
     [[nodiscard]]
-    static constexpr std::array<VkVertexInputAttributeDescription, 2> GetInputAttributeDescriptions() noexcept
+    static constexpr std::array<VkVertexInputAttributeDescription, 3> GetInputAttributeDescriptions() noexcept
     {
         VkVertexInputAttributeDescription d0{};
         d0.binding = 0;
@@ -37,6 +35,12 @@ struct StructDescriptor<Vertex>
         d1.format = VK_FORMAT_R32G32B32_SFLOAT;
         d1.offset = offsetof(Vertex, color);
 
-        return std::array{d0, d1};
+        VkVertexInputAttributeDescription d2{};
+        d2.binding = 0;
+        d2.location = 2;
+        d2.format = VK_FORMAT_R32G32_SFLOAT;
+        d2.offset = offsetof(Vertex, tex_coord);
+
+        return std::array{d0, d1, d2};
     }
 };
