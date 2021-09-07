@@ -106,7 +106,7 @@ private:
 };
 
 
-static VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {
+VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {
     auto func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
     if (func != nullptr) {
         return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
@@ -174,15 +174,19 @@ Application::Application()
     glfw_initialized_ = false;
     frame_buffer_resized_ = false;
 
-#ifndef NDEBUG
-    required_layers_.push_back("VK_LAYER_KHRONOS_validation");
-#endif
-    required_layers_.push_back("VK_LAYER_MESA_overlay");
+    if constexpr (kEnableValidation)
+    {
+        required_layers_.push_back("VK_LAYER_KHRONOS_validation");
+    }
+
+    if constexpr (kEnableOverlay)
+    {
+        required_layers_.push_back("VK_LAYER_MESA_overlay");
+    }
 
     device_extensions_.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
     app_start_time_ = GetGlobalTime();
-
 }
 
 Application::~Application()
@@ -1146,9 +1150,12 @@ void Application::CreateInstance()
 
 void Application::SetupDebugMessenger()
 {
-    VkDebugUtilsMessengerCreateInfoEXT create_info {};
-    populate_debug_messenger_create_info(create_info);
-    VkWrap(CreateDebugUtilsMessengerEXT)(instance_, &create_info, nullptr, &debug_messenger_);
+    if constexpr (kEnableDebugMessengerExtension)
+    {
+        VkDebugUtilsMessengerCreateInfoEXT create_info {};
+        populate_debug_messenger_create_info(create_info);
+        VkWrap(CreateDebugUtilsMessengerEXT)(instance_, &create_info, nullptr, &debug_messenger_);
+    }
 }
 
 void Application::MainLoop()
@@ -1433,9 +1440,10 @@ std::vector<const char*> Application::GetRequiredExtensions()
     const char** glfw_extensions = glfwGetRequiredInstanceExtensions(&num_glfw_ext);
     std::vector<const char*> extensions(glfw_extensions, glfw_extensions + num_glfw_ext);
 
-#ifndef NDEBUG
-    extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-#endif
+    if constexpr (kEnableDebugUtilsExtension)
+    {
+        extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    }
 
     return extensions;
 }

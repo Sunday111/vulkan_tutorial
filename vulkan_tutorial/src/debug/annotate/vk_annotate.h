@@ -4,6 +4,8 @@
 
 #include <string_view>
 
+#include "definitions.h"
+
 struct LabelColor
 {
     static constexpr LabelColor Red() { return LabelColor{1.0f, 0.0f, 0.0f, 1.0f}; }
@@ -24,11 +26,22 @@ struct VkAnnotate
 
     void Initialize(VkInstance instance) noexcept
     {
-        pfnQueueBeginDebugUtilsLabelEXT = (PFN_vkQueueBeginDebugUtilsLabelEXT)vkGetInstanceProcAddr(instance, "vkQueueBeginDebugUtilsLabelEXT");
-        pfnQueueEndDebugUtilsLabelEXT = (PFN_vkQueueEndDebugUtilsLabelEXT)vkGetInstanceProcAddr(instance, "vkQueueEndDebugUtilsLabelEXT");
-        pfnCmdBeginDebugUtilsLabelEXT = (PFN_vkCmdBeginDebugUtilsLabelEXT)vkGetInstanceProcAddr(instance, "vkCmdBeginDebugUtilsLabelEXT");
-        pfnCmdEndDebugUtilsLabelEXT = (PFN_vkCmdEndDebugUtilsLabelEXT)vkGetInstanceProcAddr(instance, "vkCmdEndDebugUtilsLabelEXT");
-        pfnCmdInsertDebugUtilsLabelEXT = (PFN_vkCmdInsertDebugUtilsLabelEXT)vkGetInstanceProcAddr(instance, "vkCmdInsertDebugUtilsLabelEXT");
+        if constexpr (kEnableDebugUtilsExtension)
+        {
+            pfnQueueBeginDebugUtilsLabelEXT = (PFN_vkQueueBeginDebugUtilsLabelEXT)vkGetInstanceProcAddr(instance, "vkQueueBeginDebugUtilsLabelEXT");
+            pfnQueueEndDebugUtilsLabelEXT = (PFN_vkQueueEndDebugUtilsLabelEXT)vkGetInstanceProcAddr(instance, "vkQueueEndDebugUtilsLabelEXT");
+            pfnCmdBeginDebugUtilsLabelEXT = (PFN_vkCmdBeginDebugUtilsLabelEXT)vkGetInstanceProcAddr(instance, "vkCmdBeginDebugUtilsLabelEXT");
+            pfnCmdEndDebugUtilsLabelEXT = (PFN_vkCmdEndDebugUtilsLabelEXT)vkGetInstanceProcAddr(instance, "vkCmdEndDebugUtilsLabelEXT");
+            pfnCmdInsertDebugUtilsLabelEXT = (PFN_vkCmdInsertDebugUtilsLabelEXT)vkGetInstanceProcAddr(instance, "vkCmdInsertDebugUtilsLabelEXT");
+        }
+        else
+        {
+            pfnQueueBeginDebugUtilsLabelEXT = [](auto...){};
+            pfnQueueEndDebugUtilsLabelEXT = [](auto...){};
+            pfnCmdBeginDebugUtilsLabelEXT = [](auto...){};
+            pfnCmdEndDebugUtilsLabelEXT = [](auto...){};
+            pfnCmdInsertDebugUtilsLabelEXT = [](auto...){};
+        }
     }
 
     void BeginLabel(VkQueue queue, const std::string_view& name, const LabelColor& color = LabelColor::Green()) const noexcept
