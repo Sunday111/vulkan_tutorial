@@ -1,8 +1,8 @@
-#include "read_file.h"
+#include "read_file.hpp"
+
+#include <fmt/format.h>
 
 #include <fstream>
-
-#include "fmt/format.h"
 
 void ReadFile(const std::filesystem::path& path, std::vector<char>& buffer) {
   std::ifstream file(path, std::ios::binary | std::ios::ate);

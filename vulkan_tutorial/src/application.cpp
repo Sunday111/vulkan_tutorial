@@ -1,4 +1,4 @@
-#include "application.h"
+#include "application.hpp"
 
 #include <GLFW/glfw3.h>
 
@@ -10,17 +10,16 @@
 #include <stdexcept>
 #include <string_view>
 
-#include "error_handling.h"
 #include "fmt/format.h"
 #include "glm/gtc/matrix_transform.hpp"
-#include "image_loader.h"
-#include "pipeline/descriptors/vertex_descriptor.h"
-#include "pipeline/uniform_buffer_object.h"
-#include "read_file.h"
+#include "image_loader.hpp"
+#include "pipeline/descriptors/vertex_descriptor.hpp"
+#include "pipeline/uniform_buffer_object.hpp"
+#include "read_file.hpp"
 #include "spdlog/spdlog.h"
 #include "tiny_obj_loader.h"
-#include "unused_var.h"
-#include "vulkan_utility.h"
+#include "unused_var.hpp"
+#include "vulkan_utility.hpp"
 
 VkResult CreateDebugUtilsMessengerEXT(
     VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* create_info,

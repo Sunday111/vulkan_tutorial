@@ -1,11 +1,11 @@
-#include "vulkan_utility.h"
+#include "vulkan_utility.hpp"
 
 #include <cassert>
 #include <cstring>
 
-#include "error_handling.h"
-#include "integer.h"
-#include "macro.h"
+#include "error_handling.hpp"
+#include "integer.hpp"
+#include "macro.hpp"
 
 template <auto fn, typename Element, typename... FunctionArgs>
 void vk_get_array(const std::string_view& name, std::vector<Element>& elements,

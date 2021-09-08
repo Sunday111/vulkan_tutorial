@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "integer.h"
+#include "integer.hpp"
 #include "vulkan/vulkan.h"
 
 class PhysicalDeviceInfo {

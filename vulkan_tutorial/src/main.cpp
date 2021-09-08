@@ -3,10 +3,9 @@
 #include <glm/vec4.hpp>
 #include <string_view>
 
-#include "application.h"
-#include "integer.h"
+#include "application.hpp"
 #include "spdlog/spdlog.h"
-#include "unused_var.h"
+#include "unused_var.hpp"
 
 int main(int argc, char** argv) {
   UnusedVar(argc);

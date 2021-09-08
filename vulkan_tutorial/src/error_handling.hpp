@@ -2,7 +2,7 @@
 
 #include <string_view>
 
-#include "macro.h"
+#include "macro.hpp"
 #include "vulkan/vulkan.h"
 
 void VkThrowImpl(VkResult error_code, const std::string_view& api_call_name,

@@ -9,13 +9,13 @@
 #include <string>
 #include <vector>
 
-#include "debug/annotate/vk_annotate.h"
-#include "device_surface_info.h"
-#include "error_handling.h"
-#include "integer.h"
-#include "physical_device_info.h"
-#include "pipeline/vertex.h"
-#include "vulkan/vulkan.h"
+#include "debug/annotate/vk_annotate.hpp"
+#include "device_surface_info.hpp"
+#include "error_handling.hpp"
+#include "integer.hpp"
+#include "physical_device_info.hpp"
+#include "pipeline/vertex.hpp"
+#include "vulkan/vulkan.hpp"
 
 struct GLFWwindow;
 

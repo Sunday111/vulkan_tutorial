@@ -2,7 +2,7 @@
 
 #include <string_view>
 
-#include "definitions.h"
+#include "definitions.hpp"
 #include "vulkan/vulkan.h"
 
 struct LabelColor {

@@ -3,7 +3,7 @@
 #include <span>
 #include <string_view>
 
-#include "integer.h"
+#include "integer.hpp"
 
 class ImageLoader {
  public:

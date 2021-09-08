@@ -2,8 +2,8 @@
 
 #include <array>
 
-#include "pipeline/vertex.h"
-#include "struct_descriptor.h"
+#include "pipeline/vertex.hpp"
+#include "struct_descriptor.hpp"
 #include "vulkan/vulkan.h"
 
 template <>

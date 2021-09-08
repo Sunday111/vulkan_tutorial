@@ -1,9 +1,9 @@
-#include "error_handling.h"
+#include "error_handling.hpp"
 
 #include <stdexcept>
 
 #include "fmt/format.h"
-#include "vulkan_utility.h"
+#include "vulkan_utility.hpp"
 
 void VkThrowImpl(VkResult error_code, const std::string_view& api_call_name,
                  const std::string_view& file, int line) {

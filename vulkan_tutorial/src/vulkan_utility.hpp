@@ -4,8 +4,8 @@
 #include <string_view>
 #include <vector>
 
-#include "integer.h"
-#include "vulkan/vulkan.h"
+#include "integer.hpp"
+#include "vulkan/vulkan.hpp"
 
 class VulkanUtility {
  public:

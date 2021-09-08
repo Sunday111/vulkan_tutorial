@@ -1,7 +1,7 @@
-#include "device_surface_info.h"
+#include "device_surface_info.hpp"
 
-#include "error_handling.h"
-#include "vulkan_utility.h"
+#include "error_handling.hpp"
+#include "vulkan_utility.hpp"
 
 void DeviceSurfaceInfo::Populate(VkPhysicalDevice device,
                                  VkSurfaceKHR surface) {
