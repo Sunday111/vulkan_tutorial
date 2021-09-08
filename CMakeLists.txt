@@ -24,5 +24,6 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dep/spdlog)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dep/glfw)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dep/glm)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dep/stb)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dep/tinyobjloader)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/vulkan_tutorial)
 

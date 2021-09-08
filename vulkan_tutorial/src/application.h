@@ -14,6 +14,7 @@
 #include "error_handling.h"
 #include "integer.h"
 #include "physical_device_info.h"
+#include "pipeline/vertex.h"
 #include "vulkan/vulkan.h"
 
 struct GLFWwindow;
@@ -51,6 +52,7 @@ class Application {
   void CreateCommandPools();
   void CreateDepthResources();
   void CreateTextureImages();
+  void LoadModel();
   void CreateVertexBuffers();
   void CreateIndexBuffers();
   void CreateUniformBuffers();
@@ -101,8 +103,11 @@ class Application {
   [[nodiscard]] VkPresentModeKHR ChoosePresentMode() const;
   [[nodiscard]] VkExtent2D ChooseSwapExtent() const;
   [[nodiscard]] std::vector<const char*> GetRequiredExtensions();
+  [[nodiscard]] std::filesystem::path GetContentDir() const noexcept;
   [[nodiscard]] std::filesystem::path GetShadersDir() const noexcept;
   [[nodiscard]] std::filesystem::path GetTexturesDir() const noexcept;
+  [[nodiscard]] std::filesystem::path GetModelsDir() const noexcept;
+
   VkFormat SelectDepthFormat() const;
   [[nodiscard]] VkFormat GetDepthFormat();
   [[nodiscard]] static constexpr VkImageTiling GetDepthImageTiling() noexcept {
@@ -159,12 +164,14 @@ class Application {
   VkImage texture_image_ = nullptr;
   VkDeviceMemory texture_image_memory_ = nullptr;
   VkImageView texture_image_view_ = nullptr;
+  VkSampler texture_sampler_ = nullptr;
 
   VkImage depth_image_ = nullptr;
   VkDeviceMemory depth_image_memory_ = nullptr;
   VkImageView depth_image_view_ = nullptr;
 
-  VkSampler texture_sampler_ = nullptr;
+  std::vector<Vertex> vertices_;
+  std::vector<ui32> indices_;
   VkDeviceMemory vertex_buffer_memory_ = nullptr;
   VkBuffer vertex_buffer_ = nullptr;
   VkDeviceMemory index_buffer_memory_ = nullptr;

@@ -18,6 +18,7 @@
 #include "read_file.h"
 #include "spdlog/spdlog.h"
 #include "stb/stb_image.h"
+#include "tiny_obj_loader.h"
 #include "unused_var.h"
 #include "vulkan_utility.h"
 
@@ -113,19 +114,6 @@ static void DestroyDebugUtilsMessengerEXT(
     func(instance, debug_messenger, allocator);
   }
 }
-
-static const std::vector<Vertex> vertices = {
-    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-    {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-    {{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-    {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-
-    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-    {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-    {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-    {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}};
-
-const std::vector<ui16> indices = {0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4};
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL
 DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
@@ -751,7 +739,7 @@ void Application::CreateTextureImages() {
     VkBuffer staging_buffer = nullptr;
     VkDeviceMemory staging_buffer_memory = nullptr;
 
-    const StbImage image((GetTexturesDir() / "statue.jpg").string());
+    const StbImage image((GetTexturesDir() / "viking_room.png").string());
     const auto image_data = image.GetData();
     CreateBuffer(image_data.size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
@@ -858,14 +846,74 @@ void Application::EndSingleTimeCommands(VkCommandBuffer command_buffer) {
   vkFreeCommandBuffers(device_, transient_command_pool_, 1, &command_buffer);
 }
 
+namespace std {
+template <>
+struct hash<tinyobj::index_t> {
+  size_t operator()(const tinyobj::index_t& index) const noexcept {
+    return (hash<size_t>()(index.vertex_index) ^
+            hash<size_t>()(index.texcoord_index) ^
+            hash<size_t>()(index.normal_index));
+  }
+};
+}  // namespace std
+
+namespace tinyobj {
+bool operator==(const index_t& a, const index_t& b) noexcept {
+  return a.vertex_index == b.vertex_index &&
+         a.texcoord_index == b.texcoord_index &&
+         a.normal_index == b.normal_index;
+}
+}  // namespace tinyobj
+
+void Application::LoadModel() {
+  tinyobj::attrib_t attrib;
+  std::vector<tinyobj::shape_t> shapes;
+  std::vector<tinyobj::material_t> materials;
+  std::string warn, err;
+
+  const auto model_path = (GetModelsDir() / "viking_room.obj").string();
+
+  [[unlikely]] if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
+                                     model_path.data())) {
+    throw std::runtime_error(warn + err);
+  }
+
+  std::unordered_map<tinyobj::index_t, ui32> index_remap;
+  for (const tinyobj::shape_t& shape : shapes) {
+    indices_.reserve(indices_.size() + shape.mesh.indices.size());
+    for (const tinyobj::index_t& model_index : shape.mesh.indices) {
+      auto map_iterator = index_remap.find(model_index);
+      if (map_iterator == index_remap.end()) {
+        Vertex v{};
+        v.pos = {attrib.vertices[3 * model_index.vertex_index + 0],
+                 attrib.vertices[3 * model_index.vertex_index + 1],
+                 attrib.vertices[3 * model_index.vertex_index + 2]};
+        v.tex_coord = {
+            attrib.texcoords[2 * model_index.texcoord_index + 0],
+            1.0f - attrib.texcoords[2 * model_index.texcoord_index + 1]};
+        v.color = {1.0f, 1.0f, 1.0f};
+        const ui32 index = static_cast<ui32>(vertices_.size());
+        vertices_.push_back(v);
+
+        auto [it, inserted] = index_remap.insert({model_index, index});
+        map_iterator = it;
+      }
+
+      indices_.push_back(map_iterator->second);
+    }
+  }
+}
+
 void Application::CreateVertexBuffers() {
-  CreateGpuBuffer(std::span(vertices), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                  vertex_buffer_, vertex_buffer_memory_);
+  CreateGpuBuffer(std::span<const Vertex>(vertices_),
+                  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, vertex_buffer_,
+                  vertex_buffer_memory_);
 }
 
 void Application::CreateIndexBuffers() {
-  CreateGpuBuffer(std::span(indices), VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-                  index_buffer_, index_buffer_memory_);
+  CreateGpuBuffer(std::span<const ui32>(indices_),
+                  VK_BUFFER_USAGE_INDEX_BUFFER_BIT, index_buffer_,
+                  index_buffer_memory_);
 }
 
 void Application::CreateUniformBuffers() {
@@ -1094,13 +1142,13 @@ void Application::CreateCommandBuffers() {
       vkCmdBindVertexBuffers(command_buffer, 0, num_vertex_buffers,
                              vertex_buffers.data(), offsets.data());
       vkCmdBindIndexBuffer(command_buffer, index_buffer_, 0,
-                           VK_INDEX_TYPE_UINT16);
+                           VK_INDEX_TYPE_UINT32);
       vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                               pipeline_layout_, 0, 1, &descriptor_sets_[i], 0,
                               0);
 
       ui32 num_instances = 1;
-      const ui32 num_indices = static_cast<ui32>(indices.size());
+      const ui32 num_indices = static_cast<ui32>(indices_.size());
       vkCmdDrawIndexed(command_buffer, num_indices, num_instances, 0, 0, 0);
     }
 
@@ -1167,6 +1215,7 @@ void Application::InitializeVulkan() {
   CreateTextureImages();
   CreateDepthResources();
   CreateFrameBuffers();
+  LoadModel();
   CreateVertexBuffers();
   CreateIndexBuffers();
   CreateUniformBuffers();
@@ -1457,12 +1506,20 @@ VkPresentModeKHR Application::ChoosePresentMode() const {
   return surface_info_->present_modes[best_index];
 }
 
+std::filesystem::path Application::GetContentDir() const noexcept {
+  return executable_file_.parent_path() / "content";
+}
+
 std::filesystem::path Application::GetShadersDir() const noexcept {
-  return executable_file_.parent_path() / "shaders";
+  return GetContentDir() / "shaders";
 }
 
 std::filesystem::path Application::GetTexturesDir() const noexcept {
-  return executable_file_.parent_path() / "textures";
+  return GetContentDir() / "textures";
+}
+
+std::filesystem::path Application::GetModelsDir() const noexcept {
+  return GetContentDir() / "models";
 }
 
 VkFormat Application::SelectDepthFormat() const {
