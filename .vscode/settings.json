@@ -71,6 +71,6 @@
         "stop_token": "cpp",
         "thread": "cpp"
     },
-
-    "cmake.generator": "Ninja"
+    "cmake.generator": "Ninja",
+    "editor.formatOnSave": true
 }

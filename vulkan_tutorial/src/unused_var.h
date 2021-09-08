@@ -1,4 +1,4 @@
 #pragma once
 
-template<typename... Args>
-void UnusedVar(Args&&...){}
+template <typename... Args>
+void UnusedVar(Args&&...) {}

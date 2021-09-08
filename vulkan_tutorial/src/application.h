@@ -1,181 +1,196 @@
 #pragma once
 
 #include <array>
-#include <string>
-#include <vector>
-#include <memory>
+#include <chrono>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <span>
-#include <chrono>
+#include <string>
+#include <vector>
 
-#include "vulkan/vulkan.h"
-
+#include "debug/annotate/vk_annotate.h"
+#include "device_surface_info.h"
+#include "error_handling.h"
 #include "integer.h"
 #include "physical_device_info.h"
-#include "device_surface_info.h"
-#include "debug/annotate/vk_annotate.h"
-
-#include "error_handling.h"
+#include "vulkan/vulkan.h"
 
 struct GLFWwindow;
 
-class Application
-{
-public:
-    using TimePoint = decltype(std::chrono::high_resolution_clock::now());
+class Application {
+ public:
+  using TimePoint = decltype(std::chrono::high_resolution_clock::now());
 
-    static constexpr size_t kMaxFramesInFlight = 2;
-    static constexpr ui32 kDefaultWindowWidth = 800;
-    static constexpr ui32 kDefaultWindowHeight = 600;
+  static constexpr size_t kMaxFramesInFlight = 2;
+  static constexpr ui32 kDefaultWindowWidth = 800;
+  static constexpr ui32 kDefaultWindowHeight = 600;
 
-public:
-    Application();
-    Application(const Application&) = delete;
-    Application& operator=(const Application&) = delete;
-    ~Application();
+ public:
+  Application();
+  Application(const Application&) = delete;
+  Application& operator=(const Application&) = delete;
+  ~Application();
 
-    void SetExecutableFile(std::filesystem::path path);
-    void Run();
+  void SetExecutableFile(std::filesystem::path path);
+  void Run();
 
-private:
-    void RecreateSwapChain();
-    void PickPhysicalDevice();
-    void CreateSurface();
-    void CreateDevice();
-    void CreateSwapChain();
-    void CreateSwapChainImageViews();
-    void CreateRenderPass();
-    void CreateDescriptorSetLayout();
-    void CreateGraphicsPipeline();
-    void CreateFrameBuffers();
-    [[nodiscard]] VkCommandPool CreateCommandPool(ui32 queue_family_index, VkCommandPoolCreateFlags flags = 0) const;
-    void CreateCommandPools();
-    void CreateDepthResources();
-    void CreateTextureImages();
-    void CreateVertexBuffers();
-    void CreateIndexBuffers();
-    void CreateUniformBuffers();
-    void CreateDescriptorPool();
-    void CreateDescriptorSets();
-    void CreateCommandBuffers();
-    void CreateSyncObjects();
-    VkShaderModule CreateShaderModule(const std::filesystem::path& file, std::vector<char>& cache);
-    void CheckRequiredLayersSupport();
-    void InitializeVulkan();
-    void CreateInstance();
-    void SetupDebugMessenger();
-    void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
-        VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& buffer_memory) const;
+ private:
+  void RecreateSwapChain();
+  void PickPhysicalDevice();
+  void CreateSurface();
+  void CreateDevice();
+  void CreateSwapChain();
+  void CreateSwapChainImageViews();
+  void CreateRenderPass();
+  void CreateDescriptorSetLayout();
+  void CreateGraphicsPipeline();
+  void CreateFrameBuffers();
+  [[nodiscard]] VkCommandPool CreateCommandPool(
+      ui32 queue_family_index, VkCommandPoolCreateFlags flags = 0) const;
+  void CreateCommandPools();
+  void CreateDepthResources();
+  void CreateTextureImages();
+  void CreateVertexBuffers();
+  void CreateIndexBuffers();
+  void CreateUniformBuffers();
+  void CreateDescriptorPool();
+  void CreateDescriptorSets();
+  void CreateCommandBuffers();
+  void CreateSyncObjects();
+  VkShaderModule CreateShaderModule(const std::filesystem::path& file,
+                                    std::vector<char>& cache);
+  void CheckRequiredLayersSupport();
+  void InitializeVulkan();
+  void CreateInstance();
+  void SetupDebugMessenger();
+  void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
+                    VkMemoryPropertyFlags properties, VkBuffer& buffer,
+                    VkDeviceMemory& buffer_memory) const;
 
-    void CopyBuffer(VkCommandBuffer command_buffer, VkBuffer src, VkBuffer dst, VkDeviceSize size);
-    void CopyBufferToImage(VkCommandBuffer command_buffer, VkBuffer src, VkImage image, ui32 width, ui32 height);
-    void TransitionImageLayout(VkCommandBuffer command_buffer, VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout);
+  void CopyBuffer(VkCommandBuffer command_buffer, VkBuffer src, VkBuffer dst,
+                  VkDeviceSize size);
+  void CopyBufferToImage(VkCommandBuffer command_buffer, VkBuffer src,
+                         VkImage image, ui32 width, ui32 height);
+  void TransitionImageLayout(VkCommandBuffer command_buffer, VkImage image,
+                             VkFormat format, VkImageLayout old_layout,
+                             VkImageLayout new_layout);
 
-    VkCommandBuffer BeginSingleTimeCommands();
-    void EndSingleTimeCommands(VkCommandBuffer command_buffer);
-    
-    template<typename T>
-    void ExecuteSingleTimeCommands(T&& visitor)
-    {
-        const VkCommandBuffer command_buffer = BeginSingleTimeCommands();
-        visitor(command_buffer);
-        EndSingleTimeCommands(command_buffer);
-    }
+  VkCommandBuffer BeginSingleTimeCommands();
+  void EndSingleTimeCommands(VkCommandBuffer command_buffer);
 
-    void InitializeWindow();
-    static void FrameBufferResizeCallback(GLFWwindow* window, int width, int height);
+  template <typename T>
+  void ExecuteSingleTimeCommands(T&& visitor) {
+    const VkCommandBuffer command_buffer = BeginSingleTimeCommands();
+    visitor(command_buffer);
+    EndSingleTimeCommands(command_buffer);
+  }
 
-    void MainLoop();
-    std::optional<ui32> AcquireNextSwapChainImage() const;
-    void DrawFrame();
-    void UpdateUniformBuffer(ui32 current_image);
+  void InitializeWindow();
+  static void FrameBufferResizeCallback(GLFWwindow* window, int width,
+                                        int height);
 
-    void Cleanup();
-    void CleanupSwapChain();
-    [[nodiscard]] VkSurfaceFormatKHR ChooseSurfaceFormat() const;
-    [[nodiscard]] VkPresentModeKHR ChoosePresentMode() const;
-    [[nodiscard]] VkExtent2D ChooseSwapExtent() const;
-    [[nodiscard]] std::vector<const char*> GetRequiredExtensions();
-    [[nodiscard]] std::filesystem::path GetShadersDir() const noexcept;
-    [[nodiscard]] std::filesystem::path GetTexturesDir() const noexcept;
-    VkFormat SelectDepthFormat() const;
-    [[nodiscard]] VkFormat GetDepthFormat();
-    [[nodiscard]] static constexpr VkImageTiling GetDepthImageTiling() noexcept { return VK_IMAGE_TILING_OPTIMAL; }
+  void MainLoop();
+  std::optional<ui32> AcquireNextSwapChainImage() const;
+  void DrawFrame();
+  void UpdateUniformBuffer(ui32 current_image);
 
-    void CreateGpuBufferRaw(const void* data, VkDeviceSize buffer_size,
-        VkBufferUsageFlags usage_flags, VkBuffer& buffer, VkDeviceMemory& buffer_memory);
+  void Cleanup();
+  void CleanupSwapChain();
+  [[nodiscard]] VkSurfaceFormatKHR ChooseSurfaceFormat() const;
+  [[nodiscard]] VkPresentModeKHR ChoosePresentMode() const;
+  [[nodiscard]] VkExtent2D ChooseSwapExtent() const;
+  [[nodiscard]] std::vector<const char*> GetRequiredExtensions();
+  [[nodiscard]] std::filesystem::path GetShadersDir() const noexcept;
+  [[nodiscard]] std::filesystem::path GetTexturesDir() const noexcept;
+  VkFormat SelectDepthFormat() const;
+  [[nodiscard]] VkFormat GetDepthFormat();
+  [[nodiscard]] static constexpr VkImageTiling GetDepthImageTiling() noexcept {
+    return VK_IMAGE_TILING_OPTIMAL;
+  }
 
-    template<typename T>
-    void CreateGpuBuffer(std::span<const T> view, VkBufferUsageFlags usage_flags,
-        VkBuffer& buffer, VkDeviceMemory& buffer_memory)
-    {
-        const VkDeviceSize buffer_size = sizeof(T) * view.size();
-        CreateGpuBufferRaw(view.data(), buffer_size, usage_flags, buffer, buffer_memory);
-    }
+  void CreateGpuBufferRaw(const void* data, VkDeviceSize buffer_size,
+                          VkBufferUsageFlags usage_flags, VkBuffer& buffer,
+                          VkDeviceMemory& buffer_memory);
 
-    [[nodiscard]] static TimePoint GetGlobalTime() noexcept { return std::chrono::high_resolution_clock::now(); }
-    [[nodiscard]] auto GetTimeSinceAppStart() const noexcept { return GetGlobalTime() - app_start_time_; }
+  template <typename T>
+  void CreateGpuBuffer(std::span<const T> view, VkBufferUsageFlags usage_flags,
+                       VkBuffer& buffer, VkDeviceMemory& buffer_memory) {
+    const VkDeviceSize buffer_size = sizeof(T) * view.size();
+    CreateGpuBufferRaw(view.data(), buffer_size, usage_flags, buffer,
+                       buffer_memory);
+  }
 
-    void CreateImage(ui32 width, ui32 height, VkFormat format, VkImageTiling tiling,
-        VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& image_memory);
+  [[nodiscard]] static TimePoint GetGlobalTime() noexcept {
+    return std::chrono::high_resolution_clock::now();
+  }
+  [[nodiscard]] auto GetTimeSinceAppStart() const noexcept {
+    return GetGlobalTime() - app_start_time_;
+  }
 
-    VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT);
+  void CreateImage(ui32 width, ui32 height, VkFormat format,
+                   VkImageTiling tiling, VkImageUsageFlags usage,
+                   VkMemoryPropertyFlags properties, VkImage& image,
+                   VkDeviceMemory& image_memory);
 
-private:
-    VkAnnotate annotate_;
-    std::filesystem::path executable_file_;
-    std::vector<VkImage> swap_chain_images_;
-    std::vector<VkImageView> swap_chain_image_views_;
-    std::vector<const char*> required_layers_;
-    std::vector<const char*> device_extensions_;
-    std::vector<VkFramebuffer> swap_chain_frame_buffers_;
-    std::vector<VkCommandBuffer> command_buffers_;
-    std::vector<VkSemaphore> image_available_semaphores_;
-    std::vector<VkSemaphore> render_finished_semaphores_;
-    std::vector<VkFence> in_flight_fences_; // indexed by current frame
-    std::vector<VkFence> images_in_flight_; // indexed by image index
-    std::vector<VkBuffer> uniform_buffers_;
-    std::vector<VkDeviceMemory> uniform_buffers_memory_;
-    std::vector<VkDescriptorSet> descriptor_sets_;
-    std::unique_ptr<DeviceSurfaceInfo> surface_info_;
-    std::unique_ptr<PhysicalDeviceInfo> device_info_;
+  VkImageView CreateImageView(
+      VkImage image, VkFormat format,
+      VkImageAspectFlags aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT);
 
-    VkImage texture_image_ = nullptr;
-    VkDeviceMemory texture_image_memory_ = nullptr;
-    VkImageView texture_image_view_ = nullptr;
+ private:
+  VkAnnotate annotate_;
+  std::filesystem::path executable_file_;
+  std::vector<VkImage> swap_chain_images_;
+  std::vector<VkImageView> swap_chain_image_views_;
+  std::vector<const char*> required_layers_;
+  std::vector<const char*> device_extensions_;
+  std::vector<VkFramebuffer> swap_chain_frame_buffers_;
+  std::vector<VkCommandBuffer> command_buffers_;
+  std::vector<VkSemaphore> image_available_semaphores_;
+  std::vector<VkSemaphore> render_finished_semaphores_;
+  std::vector<VkFence> in_flight_fences_;  // indexed by current frame
+  std::vector<VkFence> images_in_flight_;  // indexed by image index
+  std::vector<VkBuffer> uniform_buffers_;
+  std::vector<VkDeviceMemory> uniform_buffers_memory_;
+  std::vector<VkDescriptorSet> descriptor_sets_;
+  std::unique_ptr<DeviceSurfaceInfo> surface_info_;
+  std::unique_ptr<PhysicalDeviceInfo> device_info_;
 
-    VkImage depth_image_ = nullptr;
-    VkDeviceMemory depth_image_memory_ = nullptr;
-    VkImageView depth_image_view_ = nullptr;
+  VkImage texture_image_ = nullptr;
+  VkDeviceMemory texture_image_memory_ = nullptr;
+  VkImageView texture_image_view_ = nullptr;
 
-    VkSampler texture_sampler_ = nullptr;
-    VkDeviceMemory vertex_buffer_memory_ = nullptr;
-    VkBuffer vertex_buffer_ = nullptr;
-    VkDeviceMemory index_buffer_memory_ = nullptr;
-    VkBuffer index_buffer_ = nullptr;
-    VkQueue graphics_queue_ = nullptr;
-    VkQueue present_queue_ = nullptr;
-    VkDescriptorPool descriptor_pool_ = nullptr;
-    VkCommandPool persistent_command_pool_ = nullptr;
-    VkCommandPool transient_command_pool_ = nullptr;
-    VkPipeline graphics_pipeline_ = nullptr;
-    VkRenderPass render_pass_ = nullptr;
-    VkDescriptorSetLayout descriptor_set_layout_ = nullptr;
-    VkPipelineLayout pipeline_layout_ = nullptr;
-    VkSwapchainKHR swap_chain_ = nullptr;
-    VkSurfaceKHR surface_ = nullptr;
-    VkDevice device_ = nullptr;
-    VkDebugUtilsMessengerEXT debug_messenger_ = nullptr;
-    GLFWwindow* window_ = nullptr;
-    VkInstance instance_ = nullptr;
-    TimePoint app_start_time_;
-    size_t current_frame_ = 0;
-    std::optional<VkFormat> depth_format_ = {};
-    VkExtent2D swap_chain_extent_ = {};
-    ui32 window_width_ = kDefaultWindowWidth;
-    ui32 window_height_ = kDefaultWindowHeight;
-    VkFormat swap_chain_image_format_ = {};
-    ui8 glfw_initialized_ : 1;
-    ui8 frame_buffer_resized_ : 1;
+  VkImage depth_image_ = nullptr;
+  VkDeviceMemory depth_image_memory_ = nullptr;
+  VkImageView depth_image_view_ = nullptr;
+
+  VkSampler texture_sampler_ = nullptr;
+  VkDeviceMemory vertex_buffer_memory_ = nullptr;
+  VkBuffer vertex_buffer_ = nullptr;
+  VkDeviceMemory index_buffer_memory_ = nullptr;
+  VkBuffer index_buffer_ = nullptr;
+  VkQueue graphics_queue_ = nullptr;
+  VkQueue present_queue_ = nullptr;
+  VkDescriptorPool descriptor_pool_ = nullptr;
+  VkCommandPool persistent_command_pool_ = nullptr;
+  VkCommandPool transient_command_pool_ = nullptr;
+  VkPipeline graphics_pipeline_ = nullptr;
+  VkRenderPass render_pass_ = nullptr;
+  VkDescriptorSetLayout descriptor_set_layout_ = nullptr;
+  VkPipelineLayout pipeline_layout_ = nullptr;
+  VkSwapchainKHR swap_chain_ = nullptr;
+  VkSurfaceKHR surface_ = nullptr;
+  VkDevice device_ = nullptr;
+  VkDebugUtilsMessengerEXT debug_messenger_ = nullptr;
+  GLFWwindow* window_ = nullptr;
+  VkInstance instance_ = nullptr;
+  TimePoint app_start_time_;
+  size_t current_frame_ = 0;
+  std::optional<VkFormat> depth_format_ = {};
+  VkExtent2D swap_chain_extent_ = {};
+  ui32 window_width_ = kDefaultWindowWidth;
+  ui32 window_height_ = kDefaultWindowHeight;
+  VkFormat swap_chain_image_format_ = {};
+  ui8 glfw_initialized_ : 1;
+  ui8 frame_buffer_resized_ : 1;
 };
