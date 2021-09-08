@@ -51,6 +51,7 @@ private:
     void CreateFrameBuffers();
     [[nodiscard]] VkCommandPool CreateCommandPool(ui32 queue_family_index, VkCommandPoolCreateFlags flags = 0) const;
     void CreateCommandPools();
+    void CreateDepthResources();
     void CreateTextureImages();
     void CreateVertexBuffers();
     void CreateIndexBuffers();
@@ -92,12 +93,15 @@ private:
 
     void Cleanup();
     void CleanupSwapChain();
-    VkSurfaceFormatKHR ChooseSurfaceFormat() const;
-    VkPresentModeKHR ChoosePresentMode() const;
-    VkExtent2D ChooseSwapExtent() const;
-    std::vector<const char*> GetRequiredExtensions();
+    [[nodiscard]] VkSurfaceFormatKHR ChooseSurfaceFormat() const;
+    [[nodiscard]] VkPresentModeKHR ChoosePresentMode() const;
+    [[nodiscard]] VkExtent2D ChooseSwapExtent() const;
+    [[nodiscard]] std::vector<const char*> GetRequiredExtensions();
     [[nodiscard]] std::filesystem::path GetShadersDir() const noexcept;
     [[nodiscard]] std::filesystem::path GetTexturesDir() const noexcept;
+    VkFormat SelectDepthFormat() const;
+    [[nodiscard]] VkFormat GetDepthFormat();
+    [[nodiscard]] static constexpr VkImageTiling GetDepthImageTiling() noexcept { return VK_IMAGE_TILING_OPTIMAL; }
 
     void CreateGpuBufferRaw(const void* data, VkDeviceSize buffer_size,
         VkBufferUsageFlags usage_flags, VkBuffer& buffer, VkDeviceMemory& buffer_memory);
@@ -116,7 +120,7 @@ private:
     void CreateImage(ui32 width, ui32 height, VkFormat format, VkImageTiling tiling,
         VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& image_memory);
 
-    VkImageView CreateImageView(VkImage image, VkFormat format);
+    VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT);
 
 private:
     VkAnnotate annotate_;
@@ -136,9 +140,15 @@ private:
     std::vector<VkDescriptorSet> descriptor_sets_;
     std::unique_ptr<DeviceSurfaceInfo> surface_info_;
     std::unique_ptr<PhysicalDeviceInfo> device_info_;
+
     VkImage texture_image_ = nullptr;
     VkDeviceMemory texture_image_memory_ = nullptr;
     VkImageView texture_image_view_ = nullptr;
+
+    VkImage depth_image_ = nullptr;
+    VkDeviceMemory depth_image_memory_ = nullptr;
+    VkImageView depth_image_view_ = nullptr;
+
     VkSampler texture_sampler_ = nullptr;
     VkDeviceMemory vertex_buffer_memory_ = nullptr;
     VkBuffer vertex_buffer_ = nullptr;
@@ -161,6 +171,7 @@ private:
     VkInstance instance_ = nullptr;
     TimePoint app_start_time_;
     size_t current_frame_ = 0;
+    std::optional<VkFormat> depth_format_ = {};
     VkExtent2D swap_chain_extent_ = {};
     ui32 window_width_ = kDefaultWindowWidth;
     ui32 window_height_ = kDefaultWindowHeight;

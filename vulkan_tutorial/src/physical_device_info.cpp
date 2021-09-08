@@ -46,15 +46,47 @@ std::optional<ui32> PhysicalDeviceInfo::FindMemoryTypeIndex(ui32 filter, VkMemor
 
 ui32 PhysicalDeviceInfo::GetMemoryTypeIndex(ui32 filter, VkMemoryPropertyFlags properties) const
 {
-    std::optional<ui32> index = FindMemoryTypeIndex(filter, properties);
-
     [[likely]]
-    if(index)
+    if(const std::optional<ui32> index = FindMemoryTypeIndex(filter, properties); index.has_value())
     {
         return *index;
     }
 
     throw std::runtime_error("failed to find memory type index");
+}
+
+std::optional<VkFormat> PhysicalDeviceInfo::FindSupportedFormat(std::span<const VkFormat> candidates, VkImageTiling tiling, VkFormatFeatureFlags features) noexcept
+{
+    for(VkFormat format: candidates)
+    {
+        VkFormatProperties format_properties;
+        vkGetPhysicalDeviceFormatProperties(device, format, &format_properties);
+
+        if(tiling == VK_IMAGE_TILING_LINEAR &&
+            (format_properties.linearTilingFeatures & features) == features)
+        {
+            return format;
+        }
+
+        if(tiling == VK_IMAGE_TILING_OPTIMAL &&
+            (format_properties.optimalTilingFeatures & features) == features)
+        {
+            return format;
+        }
+    }
+
+    return {};
+}
+
+VkFormat PhysicalDeviceInfo::GetSupportedFormat(std::span<const VkFormat> candidates, VkImageTiling tiling, VkFormatFeatureFlags features)
+{
+    [[likely]]
+    if(auto f = FindSupportedFormat(candidates, tiling, features); f.has_value())
+    {
+        return *f;
+    }
+
+    throw std::runtime_error("Failed to find supported format");
 }
 
 void PhysicalDeviceInfo::PopulateIndexCache(VkSurfaceKHR surface)

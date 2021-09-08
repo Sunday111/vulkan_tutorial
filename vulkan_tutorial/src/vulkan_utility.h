@@ -45,7 +45,7 @@ public:
     }
 
     template<auto fn, typename Owner, typename Handle>
-    static void destroy(Owner& owner, std::vector<Handle>& handles, const VkAllocationCallbacks* allocation_callbacks = nullptr)
+    static void Destroy(Owner& owner, std::vector<Handle>& handles, const VkAllocationCallbacks* allocation_callbacks = nullptr)
     {
         while (!handles.empty())
         {
@@ -61,4 +61,8 @@ public:
         MapCopyUnmap(&object, sizeof(T), device, device_memory, offset, mem_map_flags);
     }
 
+    [[nodiscard]] static constexpr bool FormatHasStencilComponent(VkFormat format) noexcept
+    {
+        return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
+    }
 };

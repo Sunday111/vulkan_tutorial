@@ -18,8 +18,4 @@ static constexpr bool kEnableValidation = false;
 static constexpr bool kEnableValidation = true;
 #endif
 
-#ifdef NDEBUG
-static constexpr bool kEnableOverlay = false;
-#else
 static constexpr bool kEnableOverlay = true;
-#endif

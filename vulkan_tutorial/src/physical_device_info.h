@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <vector>
+#include <span>
 #include <string_view>
 
 #include "vulkan/vulkan.h"
@@ -24,6 +25,10 @@ public:
     [[nodiscard]] ui32 GetPresentQueueFamilyIndex() const noexcept { return static_cast<ui32>(present_fi_); }
     [[nodiscard]] std::optional<ui32> FindMemoryTypeIndex(ui32 filter, VkMemoryPropertyFlags properties) const noexcept;
     [[nodiscard]] ui32 GetMemoryTypeIndex(ui32 filter, VkMemoryPropertyFlags properties) const;
+
+
+    [[nodiscard]] std::optional<VkFormat> FindSupportedFormat(std::span<const VkFormat> candidates, VkImageTiling tiling, VkFormatFeatureFlags features) noexcept;
+    [[nodiscard]] VkFormat GetSupportedFormat(std::span<const VkFormat> candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 
 public:
     std::vector<VkQueueFamilyProperties> families_properties;

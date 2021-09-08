@@ -26,7 +26,7 @@ struct StructDescriptor<Vertex>
         VkVertexInputAttributeDescription d0{};
         d0.binding = 0;
         d0.location = 0;
-        d0.format = VK_FORMAT_R32G32_SFLOAT;
+        d0.format = VK_FORMAT_R32G32B32_SFLOAT;
         d0.offset = offsetof(Vertex, pos);
 
         VkVertexInputAttributeDescription d1{};
