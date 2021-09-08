@@ -1,6 +1,4 @@
 #pragma once
 
-template<typename T>
-struct StructDescriptor
-{
-};
+template <typename T>
+struct StructDescriptor {};
