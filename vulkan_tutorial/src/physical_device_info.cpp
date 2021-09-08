@@ -28,10 +28,10 @@ bool PhysicalDeviceInfo::HasExtension(std::string_view name) const noexcept {
 }
 
 std::optional<ui32> PhysicalDeviceInfo::FindMemoryTypeIndex(
-    ui32 filter, VkMemoryPropertyFlags properties) const noexcept {
+    ui32 filter, VkMemoryPropertyFlags required_properties) const noexcept {
   for (ui32 i = 0; i < memory_properties.memoryTypeCount; ++i) {
     if ((filter & (1 << i)) && (memory_properties.memoryTypes[i].propertyFlags &
-                                properties) == properties) {
+                                required_properties) == required_properties) {
       return i;
     }
   }
@@ -40,9 +40,9 @@ std::optional<ui32> PhysicalDeviceInfo::FindMemoryTypeIndex(
 }
 
 ui32 PhysicalDeviceInfo::GetMemoryTypeIndex(
-    ui32 filter, VkMemoryPropertyFlags properties) const {
+    ui32 filter, VkMemoryPropertyFlags required_properties) const {
   [[likely]] if (const std::optional<ui32> index =
-                     FindMemoryTypeIndex(filter, properties);
+                     FindMemoryTypeIndex(filter, required_properties);
                  index.has_value()) {
     return *index;
   }
@@ -64,17 +64,19 @@ const VkFormatProperties& PhysicalDeviceInfo::GetFormatProperties(
 
 std::optional<VkFormat> PhysicalDeviceInfo::FindSupportedFormat(
     std::span<const VkFormat> candidates, VkImageTiling tiling,
-    VkFormatFeatureFlags features) noexcept {
+    VkFormatFeatureFlags required_features) noexcept {
   for (VkFormat format : candidates) {
     const VkFormatProperties& format_properties = GetFormatProperties(format);
 
     if (tiling == VK_IMAGE_TILING_LINEAR &&
-        (format_properties.linearTilingFeatures & features) == features) {
+        (format_properties.linearTilingFeatures & required_features) ==
+            required_features) {
       return format;
     }
 
     if (tiling == VK_IMAGE_TILING_OPTIMAL &&
-        (format_properties.optimalTilingFeatures & features) == features) {
+        (format_properties.optimalTilingFeatures & required_features) ==
+            required_features) {
       return format;
     }
   }
@@ -84,8 +86,9 @@ std::optional<VkFormat> PhysicalDeviceInfo::FindSupportedFormat(
 
 VkFormat PhysicalDeviceInfo::GetSupportedFormat(
     std::span<const VkFormat> candidates, VkImageTiling tiling,
-    VkFormatFeatureFlags features) {
-  [[likely]] if (auto f = FindSupportedFormat(candidates, tiling, features);
+    VkFormatFeatureFlags required_features) {
+  [[likely]] if (auto f =
+                     FindSupportedFormat(candidates, tiling, required_features);
                  f.has_value()) {
     return *f;
   }

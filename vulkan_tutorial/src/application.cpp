@@ -90,6 +90,10 @@ Application::Application() {
     required_layers_.push_back("VK_LAYER_MESA_overlay");
   }
 
+  if constexpr (kEnableLunarGMonitor) {
+    required_layers_.push_back("VK_LAYER_LUNARG_monitor");
+  }
+
   device_extensions_.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
   app_start_time_ = GetGlobalTime();
@@ -1194,28 +1198,22 @@ VkShaderModule Application::CreateShaderModule(
 }
 
 void Application::CheckRequiredLayersSupport() {
-  if (required_layers_.empty()) {
-    return;
-  }
+  if (!required_layers_.empty()) {
+    std::vector<VkLayerProperties> available_layers;
+    VulkanUtility::GetInstanceLayerProperties(available_layers);
 
-  ui32 layer_count;
-  VkWrap(vkEnumerateInstanceLayerProperties)(&layer_count, nullptr);
+    for (const auto& layer_name : required_layers_) {
+      std::string_view name_view(layer_name);
+      const auto it =
+          std::find_if(available_layers.begin(), available_layers.end(),
+                       [&](const VkLayerProperties& layer_properties) {
+                         return name_view == layer_properties.layerName;
+                       });
 
-  std::vector<VkLayerProperties> availableLayers(layer_count);
-  VkWrap(vkEnumerateInstanceLayerProperties)(&layer_count,
-                                             availableLayers.data());
-
-  for (const auto& layer_name : required_layers_) {
-    std::string_view name_view(layer_name);
-    const auto it =
-        std::find_if(availableLayers.begin(), availableLayers.end(),
-                     [&](const VkLayerProperties& layer_properties) {
-                       return name_view == layer_properties.layerName;
-                     });
-
-    [[unlikely]] if (it == availableLayers.end()) {
-      auto message = fmt::format("{} layer is not present", name_view);
-      throw std::runtime_error(std::move(message));
+      [[unlikely]] if (it == available_layers.end()) {
+        auto message = fmt::format("{} layer is not present", name_view);
+        throw std::runtime_error(std::move(message));
+      }
     }
   }
 }

@@ -81,7 +81,8 @@ void VulkanUtility::GetSwapChainImages(VkDevice device,
   VK_GET_ARRAY(vkGetSwapchainImagesKHR, images, device, swap_chain);
 }
 
-void GetInstanceLayerProperties(std::vector<VkLayerProperties>& properties) {
+void VulkanUtility::GetInstanceLayerProperties(
+    std::vector<VkLayerProperties>& properties) {
   VK_GET_ARRAY_NO_ARG(vkEnumerateInstanceLayerProperties, properties);
 }
 
