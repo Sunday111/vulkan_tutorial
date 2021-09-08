@@ -76,7 +76,9 @@ class Application {
                          VkImage image, ui32 width, ui32 height);
   void TransitionImageLayout(VkCommandBuffer command_buffer, VkImage image,
                              VkFormat format, VkImageLayout old_layout,
-                             VkImageLayout new_layout);
+                             VkImageLayout new_layout, ui32 mip_levels);
+  void GenerateMipMaps_Blit(VkCommandBuffer command_buffer, VkImage image,
+                            ui32 width, ui32 height, ui32 mip_levels);
 
   VkCommandBuffer BeginSingleTimeCommands();
   void EndSingleTimeCommands(VkCommandBuffer command_buffer);
@@ -133,14 +135,13 @@ class Application {
     return GetGlobalTime() - app_start_time_;
   }
 
-  void CreateImage(ui32 width, ui32 height, VkFormat format,
+  void CreateImage(ui32 width, ui32 height, ui32 mip_levels, VkFormat format,
                    VkImageTiling tiling, VkImageUsageFlags usage,
                    VkMemoryPropertyFlags properties, VkImage& image,
                    VkDeviceMemory& image_memory);
 
-  VkImageView CreateImageView(
-      VkImage image, VkFormat format,
-      VkImageAspectFlags aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT);
+  VkImageView CreateImageView(VkImage image, VkFormat format,
+                              VkImageAspectFlags aspect_flags, ui32 mip_levels);
 
  private:
   VkAnnotate annotate_;
@@ -161,6 +162,7 @@ class Application {
   std::unique_ptr<DeviceSurfaceInfo> surface_info_;
   std::unique_ptr<PhysicalDeviceInfo> device_info_;
 
+  ui32 texture_mip_levels_ = 0;
   VkImage texture_image_ = nullptr;
   VkDeviceMemory texture_image_memory_ = nullptr;
   VkImageView texture_image_view_ = nullptr;

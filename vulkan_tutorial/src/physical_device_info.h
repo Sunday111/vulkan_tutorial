@@ -3,6 +3,7 @@
 #include <optional>
 #include <span>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "integer.h"
@@ -46,7 +47,10 @@ class PhysicalDeviceInfo {
       std::span<const VkFormat> candidates, VkImageTiling tiling,
       VkFormatFeatureFlags features);
 
+  const VkFormatProperties& GetFormatProperties(VkFormat format) noexcept;
+
  public:
+  std::unordered_map<VkFormat, VkFormatProperties> formats_properties;
   std::vector<VkQueueFamilyProperties> families_properties;
   std::vector<VkExtensionProperties> extensions;
   VkPhysicalDevice device = VK_NULL_HANDLE;

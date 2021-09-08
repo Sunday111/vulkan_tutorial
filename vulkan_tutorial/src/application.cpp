@@ -13,84 +13,14 @@
 #include "error_handling.h"
 #include "fmt/format.h"
 #include "glm/gtc/matrix_transform.hpp"
+#include "image_loader.h"
 #include "pipeline/descriptors/vertex_descriptor.h"
 #include "pipeline/uniform_buffer_object.h"
 #include "read_file.h"
 #include "spdlog/spdlog.h"
-#include "stb/stb_image.h"
 #include "tiny_obj_loader.h"
 #include "unused_var.h"
 #include "vulkan_utility.h"
-
-class StbImage {
- public:
-  StbImage() = default;
-  StbImage(const std::string_view& path) { LoadFromFile(path); }
-
-  StbImage(StbImage&& another) { MoveFrom(another); }
-
-  StbImage& operator=(StbImage&& another) {
-    Destroy();
-    MoveFrom(another);
-    return *this;
-  }
-
-  ~StbImage() { Destroy(); }
-
-  void LoadFromFile(const std::string_view& path) {
-    Destroy();
-    pixel_data_ =
-        stbi_load(path.data(), &width_, &height_, &channels_, STBI_rgb_alpha);
-
-    [[unlikely]] if (!pixel_data_) {
-      throw std::runtime_error(
-          fmt::format("Failed to load texture from file {}", path));
-    }
-  }
-
-  void Destroy() {
-    if (pixel_data_) {
-      stbi_image_free(pixel_data_);
-      Reset();
-    }
-  }
-
-  void Reset() {
-    pixel_data_ = nullptr;
-    width_ = -1;
-    height_ = -1;
-    channels_ = -1;
-  }
-
-  [[nodiscard]] ui32 GetWidth() const noexcept {
-    return static_cast<ui32>(width_);
-  }
-  [[nodiscard]] ui32 GetHeight() const noexcept {
-    return static_cast<ui32>(height_);
-  }
-  [[nodiscard]] ui32 GetChannels() const noexcept { return 4; }
-  [[nodiscard]] size_t GetSize() const noexcept {
-    return GetWidth() * GetHeight() * GetChannels();
-  }
-  [[nodiscard]] std::span<const stbi_uc> GetData() const noexcept {
-    return std::span(pixel_data_, pixel_data_ + GetSize());
-  }
-
- private:
-  StbImage(const StbImage&) = default;
-  StbImage& operator=(const StbImage&) = default;
-
-  void MoveFrom(StbImage& another) {
-    *this = another;
-    another.Reset();
-  }
-
- private:
-  stbi_uc* pixel_data_ = nullptr;
-  int width_ = -1;
-  int height_ = -1;
-  int channels_ = -1;
-};
 
 VkResult CreateDebugUtilsMessengerEXT(
     VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* create_info,
@@ -401,9 +331,11 @@ void Application::CreateSwapChain() {
 void Application::CreateSwapChainImageViews() {
   const size_t num_images = swap_chain_images_.size();
   swap_chain_image_views_.resize(num_images);
+  constexpr ui32 mip_levels = 1;
   for (size_t i = 0; i != num_images; i++) {
     swap_chain_image_views_[i] =
-        CreateImageView(swap_chain_images_[i], swap_chain_image_format_);
+        CreateImageView(swap_chain_images_[i], swap_chain_image_format_,
+                        VK_IMAGE_ASPECT_COLOR_BIT, mip_levels);
   }
 }
 
@@ -698,8 +630,9 @@ void Application::CreateCommandPools() {
                         VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
 }
 
-void Application::CreateImage(ui32 width, ui32 height, VkFormat format,
-                              VkImageTiling tiling, VkImageUsageFlags usage,
+void Application::CreateImage(ui32 width, ui32 height, ui32 mip_levels,
+                              VkFormat format, VkImageTiling tiling,
+                              VkImageUsageFlags usage,
                               VkMemoryPropertyFlags properties, VkImage& image,
                               VkDeviceMemory& image_memory) {
   VkImageCreateInfo image_info{};
@@ -708,7 +641,7 @@ void Application::CreateImage(ui32 width, ui32 height, VkFormat format,
   image_info.extent.width = width;
   image_info.extent.height = height;
   image_info.extent.depth = 1;
-  image_info.mipLevels = 1;
+  image_info.mipLevels = mip_levels;
   image_info.arrayLayers = 1;
   image_info.format = format;
   image_info.tiling = tiling;
@@ -734,12 +667,23 @@ void Application::CreateImage(ui32 width, ui32 height, VkFormat format,
 void Application::CreateTextureImages() {
   constexpr VkFormat image_format = VK_FORMAT_R8G8B8A8_SRGB;
 
+  // check that linear sampling is supported for this image format
+  // this is required for mipmaps generation
+  if (!(device_info_->GetFormatProperties(image_format).optimalTilingFeatures &
+        VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)) {
+    throw std::runtime_error(
+        "VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT is not supporte for "
+        "image format");
+  }
+
   // read texture from file, create image and device memory
   {
     VkBuffer staging_buffer = nullptr;
     VkDeviceMemory staging_buffer_memory = nullptr;
 
-    const StbImage image((GetTexturesDir() / "viking_room.png").string());
+    const ImageLoader image((GetTexturesDir() / "viking_room.png").string());
+    texture_mip_levels_ = 1 + static_cast<ui32>(std::floor(std::log2(std::max(
+                                  image.GetWidth(), image.GetHeight()))));
     const auto image_data = image.GetData();
     CreateBuffer(image_data.size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
@@ -748,21 +692,25 @@ void Application::CreateTextureImages() {
     VulkanUtility::MapCopyUnmap(image_data.data(), image_data.size(), device_,
                                 staging_buffer_memory);
 
-    CreateImage(image.GetWidth(), image.GetHeight(), image_format,
-                VK_IMAGE_TILING_OPTIMAL,
-                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    CreateImage(image.GetWidth(), image.GetHeight(), texture_mip_levels_,
+                image_format, VK_IMAGE_TILING_OPTIMAL,
+                VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                    VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                    VK_IMAGE_USAGE_SAMPLED_BIT,
                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, texture_image_,
                 texture_image_memory_);
 
     ExecuteSingleTimeCommands([&](VkCommandBuffer command_buffer) {
       TransitionImageLayout(command_buffer, texture_image_, image_format,
                             VK_IMAGE_LAYOUT_UNDEFINED,
-                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            texture_mip_levels_);
       CopyBufferToImage(command_buffer, staging_buffer, texture_image_,
                         image.GetWidth(), image.GetHeight());
-      TransitionImageLayout(command_buffer, texture_image_, image_format,
-                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+      // transitioned to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL while
+      // generating mips
+      GenerateMipMaps_Blit(command_buffer, texture_image_, image.GetWidth(),
+                           image.GetHeight(), texture_mip_levels_);
     });
 
     VulkanUtility::Destroy<vkDestroyBuffer>(device_, staging_buffer);
@@ -770,7 +718,9 @@ void Application::CreateTextureImages() {
   }
 
   // create image view
-  texture_image_view_ = CreateImageView(texture_image_, image_format);
+  texture_image_view_ =
+      CreateImageView(texture_image_, image_format, VK_IMAGE_ASPECT_COLOR_BIT,
+                      texture_mip_levels_);
 
   // create texture sampler
   {
@@ -791,7 +741,7 @@ void Application::CreateTextureImages() {
     sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
     sampler_info.mipLodBias = 0.0f;
     sampler_info.minLod = 0.0f;
-    sampler_info.maxLod = 0.0f;
+    sampler_info.maxLod = static_cast<float>(texture_mip_levels_);
     VkWrap(vkCreateSampler)(device_, &sampler_info, nullptr, &texture_sampler_);
   }
 }
@@ -799,18 +749,19 @@ void Application::CreateTextureImages() {
 void Application::CreateDepthResources() {
   const VkFormat format = GetDepthFormat();
   const VkImageTiling tiling = GetDepthImageTiling();
-  CreateImage(swap_chain_extent_.width, swap_chain_extent_.height, format,
-              tiling, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+  constexpr ui32 mip_levels = 1;
+  CreateImage(swap_chain_extent_.width, swap_chain_extent_.height, mip_levels,
+              format, tiling, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depth_image_,
               depth_image_memory_);
 
-  depth_image_view_ =
-      CreateImageView(depth_image_, format, VK_IMAGE_ASPECT_DEPTH_BIT);
+  depth_image_view_ = CreateImageView(depth_image_, format,
+                                      VK_IMAGE_ASPECT_DEPTH_BIT, mip_levels);
 
   ExecuteSingleTimeCommands([&](VkCommandBuffer command_buffer) {
-    TransitionImageLayout(command_buffer, depth_image_, format,
-                          VK_IMAGE_LAYOUT_UNDEFINED,
-                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    TransitionImageLayout(
+        command_buffer, depth_image_, format, VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, mip_levels);
   });
 }
 
@@ -1027,7 +978,8 @@ void Application::CopyBufferToImage(VkCommandBuffer command_buffer,
 void Application::TransitionImageLayout(VkCommandBuffer command_buffer,
                                         VkImage image, VkFormat format,
                                         VkImageLayout old_layout,
-                                        VkImageLayout new_layout) {
+                                        VkImageLayout new_layout,
+                                        ui32 mip_levels) {
   UnusedVar(format);
   VkImageMemoryBarrier barrier{};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1038,7 +990,7 @@ void Application::TransitionImageLayout(VkCommandBuffer command_buffer,
   barrier.image = image;
   barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   barrier.subresourceRange.baseMipLevel = 0;
-  barrier.subresourceRange.levelCount = 1;
+  barrier.subresourceRange.levelCount = mip_levels;
   barrier.subresourceRange.layerCount = 1;
 
   if (new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
@@ -1091,6 +1043,76 @@ void Application::TransitionImageLayout(VkCommandBuffer command_buffer,
       0, nullptr,         // memory barriers
       0, nullptr,         // buffer memory barriers
       1, &barrier);       // image memory barriers
+}
+
+void Application::GenerateMipMaps_Blit(VkCommandBuffer command_buffer,
+                                       VkImage image, ui32 width, ui32 height,
+                                       ui32 mip_levels) {
+  VkImageMemoryBarrier barrier{};
+  barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  barrier.image = image;
+  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  barrier.subresourceRange.baseArrayLayer = 0;
+  barrier.subresourceRange.layerCount = 1;
+  barrier.subresourceRange.levelCount = 1;
+
+  i32 mip_width = static_cast<i32>(width);
+  i32 mip_height = static_cast<i32>(height);
+  for (ui32 mip_level = 1; mip_level < mip_levels; ++mip_level) {
+    // Transfer mip - 1 level from VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL to
+    // VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL this transition will wait for the
+    // previous mip level to be filled, either from the previous blit command,
+    // or from vkCmdCopyBufferToImage. The current blit command will wait on
+    // this transition
+    barrier.subresourceRange.baseMipLevel = mip_level - 1;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0,
+                         nullptr, 1, &barrier);
+
+    VkImageBlit blit{};
+    blit.srcOffsets[0] = {0, 0, 0};
+    blit.srcOffsets[1] = {mip_width, mip_height, 1};
+    blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    blit.srcSubresource.mipLevel = mip_level - 1;
+    blit.srcSubresource.baseArrayLayer = 0;
+    blit.srcSubresource.layerCount = 1;
+    blit.dstOffsets[0] = {0, 0, 0};
+    blit.dstOffsets[1].x = std::max(mip_width / 2, 1);
+    blit.dstOffsets[1].y = std::max(mip_height / 2, 1);
+    blit.dstOffsets[1].z = 1;
+    blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    blit.dstSubresource.mipLevel = mip_level;
+    blit.dstSubresource.baseArrayLayer = 0;
+    blit.dstSubresource.layerCount = 1;
+    vkCmdBlitImage(command_buffer, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                   image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit,
+                   VK_FILTER_LINEAR);
+
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr,
+                         0, nullptr, 1, &barrier);
+    mip_width = std::max(mip_width / 2, 1);
+    mip_height = std::max(mip_height / 2, 1);
+  }
+
+  barrier.subresourceRange.baseMipLevel = mip_levels - 1;
+  barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+  barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+  vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                       VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0,
+                       nullptr, 1, &barrier);
 }
 
 void Application::CreateCommandBuffers() {
@@ -1399,9 +1421,10 @@ void Application::UpdateUniformBuffer(ui32 current_image) {
                          .count();
   ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f),
                           glm::vec3(0.0f, 0.0f, 1.0f));
+  const float distance = 1.0f + std::abs(std::sin(time));
   ubo.view =
-      glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
-                  glm::vec3(0.0f, 0.0f, 1.0f));
+      glm::lookAt(glm::vec3(distance, distance, distance),
+                  glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
   ubo.proj = glm::perspective(
       glm::radians(45.0f),
       swap_chain_extent_.width / (float)swap_chain_extent_.height, 0.1f, 10.0f);
@@ -1639,7 +1662,8 @@ void Application::CreateSyncObjects() {
 }
 
 VkImageView Application::CreateImageView(VkImage image, VkFormat format,
-                                         VkImageAspectFlags aspect_flags) {
+                                         VkImageAspectFlags aspect_flags,
+                                         ui32 mip_levels) {
   VkImageViewCreateInfo create_info{};
   create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
   create_info.image = image;
@@ -1651,7 +1675,7 @@ VkImageView Application::CreateImageView(VkImage image, VkFormat format,
   create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
   create_info.subresourceRange.aspectMask = aspect_flags;
   create_info.subresourceRange.baseMipLevel = 0;
-  create_info.subresourceRange.levelCount = 1;
+  create_info.subresourceRange.levelCount = mip_levels;
   create_info.subresourceRange.baseArrayLayer = 0;
   create_info.subresourceRange.layerCount = 1;
 

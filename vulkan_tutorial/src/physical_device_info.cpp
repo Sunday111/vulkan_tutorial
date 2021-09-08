@@ -50,12 +50,23 @@ ui32 PhysicalDeviceInfo::GetMemoryTypeIndex(
   throw std::runtime_error("failed to find memory type index");
 }
 
+const VkFormatProperties& PhysicalDeviceInfo::GetFormatProperties(
+    VkFormat format) noexcept {
+  auto it = formats_properties.find(format);
+  if (it != formats_properties.end()) {
+    return it->second;
+  }
+
+  VkFormatProperties& format_properties = formats_properties[format];
+  vkGetPhysicalDeviceFormatProperties(device, format, &format_properties);
+  return format_properties;
+}
+
 std::optional<VkFormat> PhysicalDeviceInfo::FindSupportedFormat(
     std::span<const VkFormat> candidates, VkImageTiling tiling,
     VkFormatFeatureFlags features) noexcept {
   for (VkFormat format : candidates) {
-    VkFormatProperties format_properties;
-    vkGetPhysicalDeviceFormatProperties(device, format, &format_properties);
+    const VkFormatProperties& format_properties = GetFormatProperties(format);
 
     if (tiling == VK_IMAGE_TILING_LINEAR &&
         (format_properties.linearTilingFeatures & features) == features) {
