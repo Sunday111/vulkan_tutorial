@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "debug/annotate/vk_annotate.hpp"
+#include "debug/vulkan_debug.hpp"
 #include "device_surface_info.hpp"
 #include "error_handling.hpp"
 #include "integer.hpp"
@@ -144,7 +144,7 @@ class Application {
                               VkImageAspectFlags aspect_flags, ui32 mip_levels);
 
  private:
-  VkAnnotate annotate_;
+  VkDebug annotate_;
   std::filesystem::path executable_file_;
   std::vector<VkImage> swap_chain_images_;
   std::vector<VkImageView> swap_chain_image_views_;

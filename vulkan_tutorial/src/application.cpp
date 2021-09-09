@@ -669,6 +669,7 @@ void Application::CreateImage(ui32 width, ui32 height, ui32 mip_levels,
 
 void Application::CreateTextureImages() {
   constexpr VkFormat image_format = VK_FORMAT_R8G8B8A8_SRGB;
+  std::filesystem::path texture_path = GetTexturesDir() / "viking_room.png";
 
   // check that linear sampling is supported for this image format
   // this is required for mipmaps generation
@@ -684,7 +685,7 @@ void Application::CreateTextureImages() {
     VkBuffer staging_buffer = nullptr;
     VkDeviceMemory staging_buffer_memory = nullptr;
 
-    const ImageLoader image((GetTexturesDir() / "viking_room.png").string());
+    const ImageLoader image(texture_path.string());
     texture_mip_levels_ = 1 + static_cast<ui32>(std::floor(std::log2(std::max(
                                   image.GetWidth(), image.GetHeight()))));
     const auto image_data = image.GetData();
@@ -692,6 +693,7 @@ void Application::CreateTextureImages() {
                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                  staging_buffer, staging_buffer_memory);
+
     VulkanUtility::MapCopyUnmap(image_data.data(), image_data.size(), device_,
                                 staging_buffer_memory);
 
@@ -702,6 +704,9 @@ void Application::CreateTextureImages() {
                     VK_IMAGE_USAGE_SAMPLED_BIT,
                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, texture_image_,
                 texture_image_memory_);
+
+    annotate_.SetObjectName(device_, texture_image_, "texture image");
+    annotate_.SetObjectName(device_, texture_image_memory_, "texture memory");
 
     ExecuteSingleTimeCommands([&](VkCommandBuffer command_buffer) {
       TransitionImageLayout(command_buffer, texture_image_, image_format,
@@ -724,6 +729,9 @@ void Application::CreateTextureImages() {
   texture_image_view_ =
       CreateImageView(texture_image_, image_format, VK_IMAGE_ASPECT_COLOR_BIT,
                       texture_mip_levels_);
+  annotate_.SetObjectName(
+      device_, texture_image_view_,
+      fmt::format("image view for texture {}", texture_path.stem().string()));
 
   // create texture sampler
   {
@@ -746,6 +754,7 @@ void Application::CreateTextureImages() {
     sampler_info.minLod = 0.0f;
     sampler_info.maxLod = static_cast<float>(texture_mip_levels_);
     VkWrap(vkCreateSampler)(device_, &sampler_info, nullptr, &texture_sampler_);
+    annotate_.SetObjectName(device_, texture_sampler_, "texture sampler");
   }
 }
 
