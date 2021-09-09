@@ -103,24 +103,39 @@ std::string_view VulkanUtility::SeverityToString(
   }
 }
 
-// TODO: iterate over VkFlags in some generic way
+constexpr std::string_view VulkanUtility::SampleCountFlagToString(
+    VkSampleCountFlagBits flag) noexcept {
+  switch (flag) {
+    case VK_SAMPLE_COUNT_64_BIT:
+      return "VK_SAMPLE_COUNT_64_BIT";
+      break;
+    case VK_SAMPLE_COUNT_32_BIT:
+      return "VK_SAMPLE_COUNT_32_BIT";
+      break;
+    case VK_SAMPLE_COUNT_16_BIT:
+      return "VK_SAMPLE_COUNT_16_BIT";
+      break;
+    case VK_SAMPLE_COUNT_8_BIT:
+      return "VK_SAMPLE_COUNT_8_BIT";
+      break;
+    case VK_SAMPLE_COUNT_4_BIT:
+      return "VK_SAMPLE_COUNT_4_BIT";
+      break;
+    case VK_SAMPLE_COUNT_2_BIT:
+      return "VK_SAMPLE_COUNT_2_BIT";
+      break;
+    case VK_SAMPLE_COUNT_1_BIT:
+      return "VK_SAMPLE_COUNT_1s_BIT";
+      break;
+    default:
+      return "Unknown";
+      break;
+  }
+}
+
 std::string VulkanUtility::SampleCountFlagsToString(
     VkSampleCountFlags flags) noexcept {
-  std::string result;
-  auto append = [&result](const std::string_view& view) {
-    if (!result.empty()) {
-      result += " | ";
-    }
-    result += view;
-  };
-  if (flags & VK_SAMPLE_COUNT_64_BIT) append("VK_SAMPLE_COUNT_64_BIT");
-  if (flags & VK_SAMPLE_COUNT_32_BIT) append("VK_SAMPLE_COUNT_32_BIT");
-  if (flags & VK_SAMPLE_COUNT_16_BIT) append("VK_SAMPLE_COUNT_16_BIT");
-  if (flags & VK_SAMPLE_COUNT_8_BIT) append("VK_SAMPLE_COUNT_8_BIT");
-  if (flags & VK_SAMPLE_COUNT_4_BIT) append("VK_SAMPLE_COUNT_4_BIT");
-  if (flags & VK_SAMPLE_COUNT_2_BIT) append("VK_SAMPLE_COUNT_2_BIT");
-  if (flags & VK_SAMPLE_COUNT_1_BIT) append("VK_SAMPLE_COUNT_1_BIT");
-  return result;
+  return FlagsToString<VkSampleCountFlagBits>(flags, SampleCountFlagToString);
 }
 
 std::string_view VulkanUtility::ResultToString(VkResult vk_result) noexcept {

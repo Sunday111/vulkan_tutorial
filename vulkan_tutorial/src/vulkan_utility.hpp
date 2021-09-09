@@ -9,6 +9,38 @@
 
 class VulkanUtility {
  public:
+  template <typename FlagType, typename Callback>
+  static void ForEachFlag(VkFlags flags, Callback&& callback,
+                          size_t max_bits = (sizeof(VkFlags) * 8)) {
+    for (size_t i = 0; i < max_bits; ++i) {
+      const VkFlags mask = VkFlags(1) << i;
+      if (flags & mask) {
+        callback(static_cast<FlagType>(mask));
+      }
+    }
+  }
+
+  // converts bitset to string like "bit_a | bit_b | ..."
+  // each bit will be converted to string with function provided by user
+  // signature fir flag_to_string: (FlagType flag) -> string
+  template <typename FlagType, typename FlagToString>
+  static std::string FlagsToString(VkFlags flags, FlagToString flag_to_string,
+                                   size_t max_bits = (sizeof(VkFlags) * 8)) {
+    std::string result;
+    ForEachFlag<FlagType>(
+        flags,
+        [&](FlagType flag) {
+          if (!result.empty()) {
+            result += " | ";
+          }
+          result += flag_to_string(flag);
+        },
+        max_bits);
+    return result;
+  }
+
+  [[nodiscard]] static constexpr std::string_view SampleCountFlagToString(
+      VkSampleCountFlagBits flag) noexcept;
   [[nodiscard]] static std::string SampleCountFlagsToString(
       VkSampleCountFlags flags) noexcept;
   [[nodiscard]] static std::string_view ResultToString(
