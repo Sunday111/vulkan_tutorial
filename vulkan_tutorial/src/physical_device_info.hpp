@@ -47,6 +47,8 @@ class PhysicalDeviceInfo {
       std::span<const VkFormat> candidates, VkImageTiling tiling,
       VkFormatFeatureFlags features);
 
+  [[nodiscard]] VkSampleCountFlagBits GetMaxUsableSampleCount() const noexcept;
+
   const VkFormatProperties& GetFormatProperties(VkFormat format) noexcept;
 
  public:

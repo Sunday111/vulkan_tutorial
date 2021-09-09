@@ -9,6 +9,8 @@
 
 class VulkanUtility {
  public:
+  [[nodiscard]] static std::string SampleCountFlagsToString(
+      VkSampleCountFlags flags) noexcept;
   [[nodiscard]] static std::string_view ResultToString(
       VkResult vk_result) noexcept;
   static void GetDevices(VkInstance instance,

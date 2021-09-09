@@ -51,6 +51,7 @@ class Application {
       ui32 queue_family_index, VkCommandPoolCreateFlags flags = 0) const;
   void CreateCommandPools();
   void CreateDepthResources();
+  void CreateColorResources();
   void CreateTextureImages();
   void LoadModel();
   void CreateVertexBuffers();
@@ -135,7 +136,8 @@ class Application {
     return GetGlobalTime() - app_start_time_;
   }
 
-  void CreateImage(ui32 width, ui32 height, ui32 mip_levels, VkFormat format,
+  void CreateImage(ui32 width, ui32 height, ui32 mip_levels,
+                   VkSampleCountFlagBits samples, VkFormat format,
                    VkImageTiling tiling, VkImageUsageFlags usage,
                    VkMemoryPropertyFlags properties, VkImage& image,
                    VkDeviceMemory& image_memory);
@@ -172,6 +174,11 @@ class Application {
   VkDeviceMemory depth_image_memory_ = nullptr;
   VkImageView depth_image_view_ = nullptr;
 
+  // Upscaled image for MSAA
+  VkImage color_image_ = nullptr;
+  VkDeviceMemory color_image_memory_ = nullptr;
+  VkImageView color_image_view_ = nullptr;
+
   std::vector<Vertex> vertices_;
   std::vector<ui32> indices_;
   VkDeviceMemory vertex_buffer_memory_ = nullptr;
@@ -197,6 +204,7 @@ class Application {
   size_t current_frame_ = 0;
   std::optional<VkFormat> depth_format_ = {};
   VkExtent2D swap_chain_extent_ = {};
+  VkSampleCountFlagBits msaa_samples_ = VK_SAMPLE_COUNT_1_BIT;
   ui32 window_width_ = kDefaultWindowWidth;
   ui32 window_height_ = kDefaultWindowHeight;
   VkFormat swap_chain_image_format_ = {};

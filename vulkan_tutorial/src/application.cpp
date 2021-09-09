@@ -193,13 +193,16 @@ void Application::PickPhysicalDevice() {
     throw std::runtime_error("There is no suitable device");
   }
 
+  msaa_samples_ = device_info_->GetMaxUsableSampleCount();
+
+  spdlog::info("picked physical device:");
+  spdlog::info("   name: {}", device_info_->properties.deviceName);
   spdlog::info(
-      "picked physical device:\n"
-      "   name: {}\n"
       "   sampler anisotropy: {} {}",
-      device_info_->properties.deviceName,
       device_info_->features.samplerAnisotropy ? "enabled" : "disabled",
       device_info_->properties.limits.maxSamplerAnisotropy);
+  spdlog::info("   MSAA max samples: {}",
+               VulkanUtility::SampleCountFlagsToString(msaa_samples_));
 }
 
 void Application::CreateSurface() {
@@ -255,6 +258,8 @@ void Application::CreateDevice() {
 
   VkPhysicalDeviceFeatures device_features{};
   device_features.samplerAnisotropy = device_info_->features.samplerAnisotropy;
+  device_features.sampleRateShading =
+      VK_TRUE;  // enable sample shading freature for the device
 
   VkDeviceCreateInfo device_create_info{};
   device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -345,13 +350,13 @@ void Application::CreateSwapChainImageViews() {
 void Application::CreateRenderPass() {
   VkAttachmentDescription color_attachment{};
   color_attachment.format = swap_chain_image_format_;
-  color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+  color_attachment.samples = msaa_samples_;
   color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
   color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
   color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
   color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
   color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+  color_attachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
   VkAttachmentReference color_attachment_ref{};
   color_attachment_ref.attachment = 0;
@@ -359,7 +364,7 @@ void Application::CreateRenderPass() {
 
   VkAttachmentDescription depth_attachment{};
   depth_attachment.format = GetDepthFormat();
-  depth_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+  depth_attachment.samples = msaa_samples_;
   depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
   depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
   depth_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -373,11 +378,27 @@ void Application::CreateRenderPass() {
   depth_attachment_ref.layout =
       VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
+  VkAttachmentDescription color_attachment_resolve{};
+  color_attachment_resolve.format = swap_chain_image_format_;
+  color_attachment_resolve.samples = VK_SAMPLE_COUNT_1_BIT;
+  color_attachment_resolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+  color_attachment_resolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  color_attachment_resolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+  color_attachment_resolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+  color_attachment_resolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  color_attachment_resolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+  VkAttachmentReference color_attachment_resolve_ref{};
+  color_attachment_resolve_ref.attachment = 2;
+  color_attachment_resolve_ref.layout =
+      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
   VkSubpassDescription subpass{};
   subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
   subpass.colorAttachmentCount = 1;
   subpass.pColorAttachments = &color_attachment_ref;
   subpass.pDepthStencilAttachment = &depth_attachment_ref;
+  subpass.pResolveAttachments = &color_attachment_resolve_ref;
 
   VkSubpassDependency dependency{};
   dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -390,7 +411,8 @@ void Application::CreateRenderPass() {
   dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
                              VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
-  const std::array attachments{color_attachment, depth_attachment};
+  const std::array attachments{color_attachment, depth_attachment,
+                               color_attachment_resolve};
 
   VkRenderPassCreateInfo render_pass_create_info{};
   render_pass_create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -511,9 +533,9 @@ void Application::CreateGraphicsPipeline() {
   VkPipelineMultisampleStateCreateInfo multisampling{};
   multisampling.sType =
       VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-  multisampling.sampleShadingEnable = VK_FALSE;
-  multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-  multisampling.minSampleShading = 1.0f;           // Optional
+  multisampling.sampleShadingEnable = VK_TRUE;
+  multisampling.rasterizationSamples = msaa_samples_;
+  multisampling.minSampleShading = 0.2f;           // Optional
   multisampling.pSampleMask = nullptr;             // Optional
   multisampling.alphaToCoverageEnable = VK_FALSE;  // Optional
   multisampling.alphaToOneEnable = VK_FALSE;       // Optional
@@ -597,7 +619,8 @@ void Application::CreateFrameBuffers() {
   swap_chain_frame_buffers_.resize(num_images);
 
   for (size_t index = 0; index < num_images; ++index) {
-    std::array attachments{swap_chain_image_views_[index], depth_image_view_};
+    std::array attachments{color_image_view_, depth_image_view_,
+                           swap_chain_image_views_[index]};
 
     VkFramebufferCreateInfo frame_buffer_info{};
     frame_buffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -634,8 +657,8 @@ void Application::CreateCommandPools() {
 }
 
 void Application::CreateImage(ui32 width, ui32 height, ui32 mip_levels,
-                              VkFormat format, VkImageTiling tiling,
-                              VkImageUsageFlags usage,
+                              VkSampleCountFlagBits samples, VkFormat format,
+                              VkImageTiling tiling, VkImageUsageFlags usage,
                               VkMemoryPropertyFlags properties, VkImage& image,
                               VkDeviceMemory& image_memory) {
   VkImageCreateInfo image_info{};
@@ -651,7 +674,7 @@ void Application::CreateImage(ui32 width, ui32 height, ui32 mip_levels,
   image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   image_info.usage = usage;
   image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+  image_info.samples = samples;
   image_info.flags = 0;
   VkWrap(vkCreateImage)(device_, &image_info, nullptr, &image);
 
@@ -698,7 +721,7 @@ void Application::CreateTextureImages() {
                                 staging_buffer_memory);
 
     CreateImage(image.GetWidth(), image.GetHeight(), texture_mip_levels_,
-                image_format, VK_IMAGE_TILING_OPTIMAL,
+                VK_SAMPLE_COUNT_1_BIT, image_format, VK_IMAGE_TILING_OPTIMAL,
                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
                     VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                     VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -763,18 +786,40 @@ void Application::CreateDepthResources() {
   const VkImageTiling tiling = GetDepthImageTiling();
   constexpr ui32 mip_levels = 1;
   CreateImage(swap_chain_extent_.width, swap_chain_extent_.height, mip_levels,
-              format, tiling, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+              msaa_samples_, format, tiling,
+              VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depth_image_,
               depth_image_memory_);
 
+  annotate_.SetObjectName(device_, depth_image_, "depth image");
+  annotate_.SetObjectName(device_, depth_image_memory_, "depth image memory");
+
   depth_image_view_ = CreateImageView(depth_image_, format,
                                       VK_IMAGE_ASPECT_DEPTH_BIT, mip_levels);
+
+  annotate_.SetObjectName(device_, depth_image_view_, "depth image view");
 
   ExecuteSingleTimeCommands([&](VkCommandBuffer command_buffer) {
     TransitionImageLayout(
         command_buffer, depth_image_, format, VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, mip_levels);
   });
+}
+
+void Application::CreateColorResources() {
+  const VkFormat color_format = swap_chain_image_format_;
+  const ui32 mip_levels = 1;
+  CreateImage(swap_chain_extent_.width, swap_chain_extent_.height, mip_levels,
+              msaa_samples_, color_format, VK_IMAGE_TILING_OPTIMAL,
+              VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT |
+                  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, color_image_,
+              color_image_memory_);
+  annotate_.SetObjectName(device_, color_image_, "color image");
+  annotate_.SetObjectName(device_, color_image_memory_, "color image memory");
+  color_image_view_ =
+      CreateImageView(color_image_, color_format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+  annotate_.SetObjectName(device_, color_image_view_, "color image view");
 }
 
 VkCommandBuffer Application::BeginSingleTimeCommands() {
@@ -1241,6 +1286,7 @@ void Application::InitializeVulkan() {
   CreateGraphicsPipeline();
   CreateCommandPools();
   CreateTextureImages();
+  CreateColorResources();
   CreateDepthResources();
   CreateFrameBuffers();
   LoadModel();
@@ -1271,6 +1317,7 @@ void Application::RecreateSwapChain() {
   CreateSwapChainImageViews();
   CreateRenderPass();
   CreateGraphicsPipeline();
+  CreateColorResources();
   CreateDepthResources();
   CreateFrameBuffers();
   CreateUniformBuffers();
@@ -1484,6 +1531,14 @@ void Application::Cleanup() {
 void Application::CleanupSwapChain() {
   using Vk = VulkanUtility;
 
+  Vk::Destroy<vkDestroyImageView>(device_, depth_image_view_);
+  Vk::Destroy<vkDestroyImage>(device_, depth_image_);
+  Vk::FreeMemory(device_, depth_image_memory_);
+
+  Vk::Destroy<vkDestroyImageView>(device_, color_image_view_);
+  Vk::Destroy<vkDestroyImage>(device_, color_image_);
+  Vk::FreeMemory(device_, color_image_memory_);
+
   Vk::Destroy<vkDestroyFramebuffer>(device_, swap_chain_frame_buffers_);
   if (!command_buffers_.empty()) {
     vkFreeCommandBuffers(device_, persistent_command_pool_,
@@ -1491,10 +1546,6 @@ void Application::CleanupSwapChain() {
                          command_buffers_.data());
     command_buffers_.clear();
   }
-
-  Vk::Destroy<vkDestroyImageView>(device_, depth_image_view_);
-  Vk::Destroy<vkDestroyImage>(device_, depth_image_);
-  Vk::FreeMemory(device_, depth_image_memory_);
 
   Vk::Destroy<vkDestroyPipeline>(device_, graphics_pipeline_);
   Vk::Destroy<vkDestroyPipelineLayout>(device_, pipeline_layout_);
