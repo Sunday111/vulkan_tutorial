@@ -4,6 +4,7 @@
 
 #include "definitions.hpp"
 #include "integer.hpp"
+#include "unused_var.hpp"
 #include "vulkan/vulkan.h"
 #include "vulkan_object_type_traits.hpp"
 
@@ -62,6 +63,8 @@ struct VkDebug {
   void CallImplFn(Args&&... args) const noexcept {
     if constexpr (kEnableDebugUtilsExtension) {
       (this->*Member)(std::forward<Args>(args)...);
+    } else {
+      UnusedVar(std::forward<Args>(args)...);
     }
   }
 
