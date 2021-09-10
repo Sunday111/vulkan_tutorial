@@ -3,23 +3,23 @@
 void VkDebug::Initialize(VkInstance instance) noexcept {
   if constexpr (kEnableDebugUtilsExtension) {
     queue_begin_debug_utils_label_ =
-        (PFN_vkQueueBeginDebugUtilsLabelEXT)vkGetInstanceProcAddr(
-            instance, "vkQueueBeginDebugUtilsLabelEXT");
+        reinterpret_cast<PFN_vkQueueBeginDebugUtilsLabelEXT>(
+            vkGetInstanceProcAddr(instance, "vkQueueBeginDebugUtilsLabelEXT"));
     queue_end_debug_utils_label_ =
-        (PFN_vkQueueEndDebugUtilsLabelEXT)vkGetInstanceProcAddr(
-            instance, "vkQueueEndDebugUtilsLabelEXT");
+        reinterpret_cast<PFN_vkQueueEndDebugUtilsLabelEXT>(
+            vkGetInstanceProcAddr(instance, "vkQueueEndDebugUtilsLabelEXT"));
     cmd_begin_debug_utils_label_ =
-        (PFN_vkCmdBeginDebugUtilsLabelEXT)vkGetInstanceProcAddr(
-            instance, "vkCmdBeginDebugUtilsLabelEXT");
+        reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(
+            vkGetInstanceProcAddr(instance, "vkCmdBeginDebugUtilsLabelEXT"));
     cmd_end_debug_utils_label_ =
-        (PFN_vkCmdEndDebugUtilsLabelEXT)vkGetInstanceProcAddr(
-            instance, "vkCmdEndDebugUtilsLabelEXT");
+        reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(
+            vkGetInstanceProcAddr(instance, "vkCmdEndDebugUtilsLabelEXT"));
     cmd_insert_debug_utils_label_ext_ =
-        (PFN_vkCmdInsertDebugUtilsLabelEXT)vkGetInstanceProcAddr(
-            instance, "vkCmdInsertDebugUtilsLabelEXT");
+        reinterpret_cast<PFN_vkCmdInsertDebugUtilsLabelEXT>(
+            vkGetInstanceProcAddr(instance, "vkCmdInsertDebugUtilsLabelEXT"));
     set_debug_utils_object_name_ =
-        (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(
-            instance, "vkSetDebugUtilsObjectNameEXT");
+        reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(
+            vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT"));
   }
 }
 

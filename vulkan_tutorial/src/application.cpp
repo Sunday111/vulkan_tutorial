@@ -11,8 +11,8 @@
 #include <string_view>
 
 #include "fmt/format.h"
-#include "glm/gtc/matrix_transform.hpp"
 #include "image_loader.hpp"
+#include "include_glm.hpp"
 #include "pipeline/descriptors/vertex_descriptor.hpp"
 #include "pipeline/uniform_buffer_object.hpp"
 #include "read_file.hpp"
@@ -21,12 +21,16 @@
 #include "unused_var.hpp"
 #include "vulkan_utility.hpp"
 
+include_glm_begin;
+#include "glm/gtc/matrix_transform.hpp"
+include_glm_end;
+
 VkResult CreateDebugUtilsMessengerEXT(
     VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* create_info,
     const VkAllocationCallbacks* allocator,
     VkDebugUtilsMessengerEXT* debug_messenger) {
-  auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
-      instance, "vkCreateDebugUtilsMessengerEXT");
+  auto func = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
+      vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
   if (func != nullptr) {
     return func(instance, create_info, allocator, debug_messenger);
   } else {
@@ -37,8 +41,8 @@ VkResult CreateDebugUtilsMessengerEXT(
 static void DestroyDebugUtilsMessengerEXT(
     VkInstance instance, VkDebugUtilsMessengerEXT debug_messenger,
     const VkAllocationCallbacks* allocator) {
-  auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
-      instance, "vkDestroyDebugUtilsMessengerEXT");
+  auto func = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
+      vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));
   if (func && debug_messenger) {
     func(instance, debug_messenger, allocator);
   }
@@ -73,7 +77,7 @@ DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
       break;
   }
 
-  return VK_FALSE;
+  return kVkFalse;
 }
 
 Application::Application() {
@@ -117,8 +121,9 @@ void Application::InitializeWindow() {
   glfw_initialized_ = true;
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-  window_ = glfwCreateWindow(window_width_, window_height_, "Vulkan", nullptr,
-                             nullptr);
+  window_ = glfwCreateWindow(static_cast<int>(window_width_),
+                             static_cast<int>(window_height_), "Vulkan",
+                             nullptr, nullptr);
   glfwSetWindowUserPointer(window_, this);
   glfwSetFramebufferSizeCallback(window_,
                                  Application::FrameBufferResizeCallback);
@@ -231,7 +236,7 @@ void Application::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
       memory_requirements.memoryTypeBits, properties);
 
   VkWrap(vkAllocateMemory)(device_, &alloc_info, nullptr, &buffer_memory);
-  VkWrap(vkBindBufferMemory)(device_, buffer, buffer_memory, 0);
+  VkWrap(vkBindBufferMemory)(device_, buffer, buffer_memory, 0u);
 }
 
 void Application::CreateDevice() {
@@ -259,7 +264,7 @@ void Application::CreateDevice() {
   VkPhysicalDeviceFeatures device_features{};
   device_features.samplerAnisotropy = device_info_->features.samplerAnisotropy;
   device_features.sampleRateShading =
-      VK_TRUE;  // enable sample shading freature for the device
+      kVkTrue;  // enable sample shading freature for the device
 
   VkDeviceCreateInfo device_create_info{};
   device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -327,8 +332,8 @@ void Application::CreateSwapChain() {
   create_info.preTransform = surface_info_->capabilities.currentTransform;
   create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
   create_info.presentMode = presentMode;
-  create_info.clipped = VK_TRUE;
-  create_info.oldSwapchain = VK_NULL_HANDLE;
+  create_info.clipped = kVkTrue;
+  create_info.oldSwapchain = nullptr;
 
   VkWrap(vkCreateSwapchainKHR)(device_, &create_info, nullptr, &swap_chain_);
 
@@ -496,7 +501,7 @@ void Application::CreateGraphicsPipeline() {
   input_assembly.sType =
       VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
   input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-  input_assembly.primitiveRestartEnable = VK_FALSE;
+  input_assembly.primitiveRestartEnable = kVkFalse;
 
   VkViewport viewport{};
   viewport.x = 0.0f;
@@ -519,13 +524,13 @@ void Application::CreateGraphicsPipeline() {
 
   VkPipelineRasterizationStateCreateInfo rasterizer{};
   rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-  rasterizer.depthClampEnable = VK_FALSE;
-  rasterizer.rasterizerDiscardEnable = VK_FALSE;
+  rasterizer.depthClampEnable = kVkFalse;
+  rasterizer.rasterizerDiscardEnable = kVkFalse;
   rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
   rasterizer.lineWidth = 1.0f;
   rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
   rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-  rasterizer.depthBiasEnable = VK_FALSE;
+  rasterizer.depthBiasEnable = kVkFalse;
   rasterizer.depthBiasConstantFactor = 0.0f;  // Optional
   rasterizer.depthBiasClamp = 0.0f;           // Optional
   rasterizer.depthBiasSlopeFactor = 0.0f;     // Optional
@@ -533,18 +538,18 @@ void Application::CreateGraphicsPipeline() {
   VkPipelineMultisampleStateCreateInfo multisampling{};
   multisampling.sType =
       VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-  multisampling.sampleShadingEnable = VK_TRUE;
+  multisampling.sampleShadingEnable = kVkTrue;
   multisampling.rasterizationSamples = msaa_samples_;
   multisampling.minSampleShading = 0.2f;           // Optional
   multisampling.pSampleMask = nullptr;             // Optional
-  multisampling.alphaToCoverageEnable = VK_FALSE;  // Optional
-  multisampling.alphaToOneEnable = VK_FALSE;       // Optional
+  multisampling.alphaToCoverageEnable = kVkFalse;  // Optional
+  multisampling.alphaToOneEnable = kVkFalse;       // Optional
 
   VkPipelineColorBlendAttachmentState colorBlendAttachment{};
   colorBlendAttachment.colorWriteMask =
       VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
       VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-  colorBlendAttachment.blendEnable = VK_FALSE;
+  colorBlendAttachment.blendEnable = kVkFalse;
   colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;   // Optional
   colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;  // Optional
   colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;              // Optional
@@ -555,20 +560,20 @@ void Application::CreateGraphicsPipeline() {
   VkPipelineDepthStencilStateCreateInfo depth_stencil{};
   depth_stencil.sType =
       VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-  depth_stencil.depthTestEnable = VK_TRUE;
-  depth_stencil.depthWriteEnable = VK_TRUE;
+  depth_stencil.depthTestEnable = kVkTrue;
+  depth_stencil.depthWriteEnable = kVkTrue;
   depth_stencil.depthCompareOp = VK_COMPARE_OP_LESS;
-  depth_stencil.depthBoundsTestEnable = VK_FALSE;
+  depth_stencil.depthBoundsTestEnable = kVkFalse;
   depth_stencil.minDepthBounds = 0.0f;
   depth_stencil.maxDepthBounds = 1.0f;
-  depth_stencil.stencilTestEnable = VK_FALSE;
+  depth_stencil.stencilTestEnable = kVkFalse;
   depth_stencil.front = {};
   depth_stencil.back = {};
 
   VkPipelineColorBlendStateCreateInfo color_blending{};
   color_blending.sType =
       VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-  color_blending.logicOpEnable = VK_FALSE;
+  color_blending.logicOpEnable = kVkFalse;
   color_blending.logicOp = VK_LOGIC_OP_COPY;  // Optional
   color_blending.attachmentCount = 1;
   color_blending.pAttachments = &colorBlendAttachment;
@@ -603,10 +608,10 @@ void Application::CreateGraphicsPipeline() {
   pipeline_info.layout = pipeline_layout_;
   pipeline_info.renderPass = render_pass_;
   pipeline_info.subpass = 0;
-  pipeline_info.basePipelineHandle = VK_NULL_HANDLE;  // Optional
-  pipeline_info.basePipelineIndex = -1;               // Optional
+  pipeline_info.basePipelineHandle = nullptr;  // Optional
+  pipeline_info.basePipelineIndex = -1;        // Optional
 
-  VkWrap(vkCreateGraphicsPipelines)(device_, nullptr, 1, &pipeline_info,
+  VkWrap(vkCreateGraphicsPipelines)(device_, nullptr, 1u, &pipeline_info,
                                     nullptr, &graphics_pipeline_);
 
   VulkanUtility::Destroy<vkDestroyShaderModule>(device_, vert_shader_module);
@@ -687,7 +692,7 @@ void Application::CreateImage(ui32 width, ui32 height, ui32 mip_levels,
   alloc_info.memoryTypeIndex = device_info_->GetMemoryTypeIndex(
       memory_requirements.memoryTypeBits, properties);
   VkWrap(vkAllocateMemory)(device_, &alloc_info, nullptr, &image_memory);
-  VkWrap(vkBindImageMemory)(device_, image, image_memory, 0);
+  VkWrap(vkBindImageMemory)(device_, image, image_memory, 0u);
 }
 
 void Application::CreateTextureImages() {
@@ -769,8 +774,8 @@ void Application::CreateTextureImages() {
     sampler_info.maxAnisotropy =
         device_info_->properties.limits.maxSamplerAnisotropy;
     sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-    sampler_info.unnormalizedCoordinates = VK_FALSE;
-    sampler_info.compareEnable = VK_FALSE;
+    sampler_info.unnormalizedCoordinates = kVkFalse;
+    sampler_info.compareEnable = kVkFalse;
     sampler_info.compareOp = VK_COMPARE_OP_ALWAYS;
     sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
     sampler_info.mipLodBias = 0.0f;
@@ -848,19 +853,19 @@ void Application::EndSingleTimeCommands(VkCommandBuffer command_buffer) {
   submit_info.commandBufferCount = 1;
   submit_info.pCommandBuffers = &command_buffer;
 
-  VkWrap(vkQueueSubmit)(graphics_queue_, 1, &submit_info, nullptr);
+  VkWrap(vkQueueSubmit)(graphics_queue_, 1u, &submit_info, nullptr);
   VkWrap(vkQueueWaitIdle)(graphics_queue_);
 
-  vkFreeCommandBuffers(device_, transient_command_pool_, 1, &command_buffer);
+  vkFreeCommandBuffers(device_, transient_command_pool_, 1u, &command_buffer);
 }
 
 namespace std {
 template <>
 struct hash<tinyobj::index_t> {
   size_t operator()(const tinyobj::index_t& index) const noexcept {
-    return (hash<size_t>()(index.vertex_index) ^
-            hash<size_t>()(index.texcoord_index) ^
-            hash<size_t>()(index.normal_index));
+    return (hash<int>()(index.vertex_index) ^
+            hash<int>()(index.texcoord_index) ^
+            hash<int>()(index.normal_index));
   }
 };
 }  // namespace std
@@ -893,12 +898,16 @@ void Application::LoadModel() {
       auto map_iterator = index_remap.find(model_index);
       if (map_iterator == index_remap.end()) {
         Vertex v{};
-        v.pos = {attrib.vertices[3 * model_index.vertex_index + 0],
-                 attrib.vertices[3 * model_index.vertex_index + 1],
-                 attrib.vertices[3 * model_index.vertex_index + 2]};
-        v.tex_coord = {
-            attrib.texcoords[2 * model_index.texcoord_index + 0],
-            1.0f - attrib.texcoords[2 * model_index.texcoord_index + 1]};
+        const size_t vertex_offset =
+            static_cast<size_t>(3 * model_index.vertex_index);
+        v.pos = {attrib.vertices[vertex_offset + 0u],
+                 attrib.vertices[vertex_offset + 1u],
+                 attrib.vertices[vertex_offset + 2u]};
+
+        const size_t texcoord_offset =
+            static_cast<size_t>(2 * model_index.texcoord_index);
+        v.tex_coord = {attrib.texcoords[texcoord_offset + 0u],
+                       1.0f - attrib.texcoords[texcoord_offset + 1u]};
         v.color = {1.0f, 1.0f, 1.0f};
         const ui32 index = static_cast<ui32>(vertices_.size());
         vertices_.push_back(v);
@@ -1224,7 +1233,7 @@ void Application::CreateCommandBuffers() {
                            VK_INDEX_TYPE_UINT32);
       vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                               pipeline_layout_, 0, 1, &descriptor_sets_[i], 0,
-                              0);
+                              nullptr);
 
       ui32 num_instances = 1;
       const ui32 num_indices = static_cast<ui32>(indices_.size());
@@ -1351,8 +1360,7 @@ void Application::CreateInstance() {
   if (create_info.enabledLayerCount > 0) {
     create_info.ppEnabledLayerNames = required_layers_.data();
     populate_debug_messenger_create_info(create_messenger_info);
-    create_info.pNext =
-        (VkDebugUtilsMessengerCreateInfoEXT*)&create_messenger_info;
+    create_info.pNext = &create_messenger_info;
   }
 
   VkWrap(vkCreateInstance)(&create_info, nullptr, &instance_);
@@ -1376,17 +1384,16 @@ void Application::MainLoop() {
 
 void Application::DrawFrame() {
   // first check that nobody does not draw to current frame
-  VkWrap(vkWaitForFences)(device_, 1, &in_flight_fences_[current_frame_],
-                          VK_TRUE, UINT64_MAX);
+  VkWrap(vkWaitForFences)(device_, 1u, &in_flight_fences_[current_frame_],
+                          kVkTrue, UINT64_MAX);
 
   // get next image index from the swap chain
   ui32 image_index;
 
   {
-    const VkResult acquire_result =
-        vkAcquireNextImageKHR(device_, swap_chain_, UINT64_MAX,
-                              image_available_semaphores_[current_frame_],
-                              VK_NULL_HANDLE, &image_index);
+    const VkResult acquire_result = vkAcquireNextImageKHR(
+        device_, swap_chain_, UINT64_MAX,
+        image_available_semaphores_[current_frame_], nullptr, &image_index);
 
     switch (acquire_result) {
       case VK_SUCCESS:
@@ -1407,7 +1414,7 @@ void Application::DrawFrame() {
   // Check if a previous frame is using this image (i.e. there is its fence to
   // wait on)
   if (auto fence = images_in_flight_[image_index]; fence != VK_NULL_HANDLE) {
-    VkWrap(vkWaitForFences)(device_, 1, &fence, VK_TRUE, UINT64_MAX);
+    VkWrap(vkWaitForFences)(device_, 1u, &fence, kVkTrue, UINT64_MAX);
   }
 
   // Mark the image as now being in use by this frame
@@ -1437,8 +1444,8 @@ void Application::DrawFrame() {
   submit_info.signalSemaphoreCount = num_signal_semaphores;
   submit_info.pSignalSemaphores = signal_semaphores.data();
 
-  VkWrap(vkResetFences)(device_, 1, &in_flight_fences_[current_frame_]);
-  VkWrap(vkQueueSubmit)(graphics_queue_, 1, &submit_info,
+  VkWrap(vkResetFences)(device_, 1u, &in_flight_fences_[current_frame_]);
+  VkWrap(vkQueueSubmit)(graphics_queue_, 1u, &submit_info,
                         in_flight_fences_[current_frame_]);
 
   VkPresentInfoKHR present_info{};
@@ -1478,9 +1485,10 @@ void Application::UpdateUniformBuffer(ui32 current_image) {
   ubo.view =
       glm::lookAt(glm::vec3(distance, distance, distance),
                   glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-  ubo.proj = glm::perspective(
-      glm::radians(45.0f),
-      swap_chain_extent_.width / (float)swap_chain_extent_.height, 0.1f, 10.0f);
+  ubo.proj = glm::perspective(glm::radians(45.0f),
+                              static_cast<float>(swap_chain_extent_.width) /
+                                  static_cast<float>(swap_chain_extent_.height),
+                              0.1f, 10.0f);
   ubo.proj[1][1] *= -1;
 
   VulkanUtility::MapCopyUnmap(ubo, device_,
@@ -1715,7 +1723,7 @@ void Application::CreateSyncObjects() {
   image_available_semaphores_ = make_n(kMaxFramesInFlight, make_semaphore);
   render_finished_semaphores_ = make_n(kMaxFramesInFlight, make_semaphore);
   in_flight_fences_ = make_n(kMaxFramesInFlight, make_fence);
-  images_in_flight_.resize(swap_chain_image_views_.size(), VK_NULL_HANDLE);
+  images_in_flight_.resize(swap_chain_image_views_.size(), nullptr);
 }
 
 VkImageView Application::CreateImageView(VkImage image, VkFormat format,

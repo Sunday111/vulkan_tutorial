@@ -13,7 +13,7 @@ void ReadFile(const std::filesystem::path& path, std::vector<char>& buffer) {
   }
   const std::streamsize size = file.tellg();
   file.seekg(0, std::ios::beg);
-  buffer.resize(size);
+  buffer.resize(static_cast<size_t>(size));
 
   [[unlikely]] if (!file.read(buffer.data(), size)) {
     auto message = fmt::format("failed to read {} bytes from file {}", size,

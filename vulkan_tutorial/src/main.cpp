@@ -1,6 +1,4 @@
 #include <filesystem>
-#include <glm/mat4x4.hpp>
-#include <glm/vec4.hpp>
 #include <string_view>
 
 #include "application.hpp"

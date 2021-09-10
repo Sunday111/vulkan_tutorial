@@ -7,6 +7,9 @@
 #include "integer.hpp"
 #include "vulkan/vulkan.hpp"
 
+constexpr VkBool32 kVkTrue = 1u;
+constexpr VkBool32 kVkFalse = 0u;
+
 class VulkanUtility {
  public:
   template <typename FlagType, typename Callback>

@@ -3,7 +3,17 @@
 #include <stdexcept>
 
 #include "fmt/format.h"
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdouble-promotion"
+#pragma GCC diagnostic ignored "-Wcast-qual"
+#pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#pragma GCC diagnostic ignored "-Wsign-conversion"
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+#pragma GCC diagnostic ignored "-Wconversion"
+#pragma GCC diagnostic ignored "-Wduplicated-branches"
 #include "stb/stb_image.h"
+#pragma GCC diagnostic pop
 
 void ImageLoader::MoveFrom(ImageLoader& another) {
   *this = another;

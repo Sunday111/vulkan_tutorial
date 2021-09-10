@@ -55,7 +55,7 @@ class PhysicalDeviceInfo {
   std::unordered_map<VkFormat, VkFormatProperties> formats_properties;
   std::vector<VkQueueFamilyProperties> families_properties;
   std::vector<VkExtensionProperties> extensions;
-  VkPhysicalDevice device = VK_NULL_HANDLE;
+  VkPhysicalDevice device = nullptr;
   VkPhysicalDeviceProperties properties;
   VkPhysicalDeviceFeatures features;
   VkPhysicalDeviceMemoryProperties memory_properties;

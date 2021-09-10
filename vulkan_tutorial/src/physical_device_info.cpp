@@ -118,7 +118,8 @@ void PhysicalDeviceInfo::PopulateIndexCache(VkSurfaceKHR surface) {
       graphics_fi_ = i;
     }
 
-    if (VulkanUtility::DeviceSupportsPresentation(device, i, surface)) {
+    if (VulkanUtility::DeviceSupportsPresentation(device, static_cast<ui32>(i),
+                                                  surface)) {
       present_fi_ = i;
     }
 

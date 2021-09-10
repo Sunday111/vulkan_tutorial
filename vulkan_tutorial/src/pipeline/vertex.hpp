@@ -1,6 +1,11 @@
 #pragma once
 
+#include "include_glm.hpp"
+include_glm_begin;
 #include "glm/glm.hpp"
+#include "glm/mat4x4.hpp"
+#include "glm/vec4.hpp"
+include_glm_end;
 
 struct Vertex {
   glm::vec3 pos;

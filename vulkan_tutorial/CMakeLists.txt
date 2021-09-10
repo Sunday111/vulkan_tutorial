@@ -45,7 +45,28 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
   endif()
 else()
-  target_compile_options(${target_name} PRIVATE -Wall -Wextra -Wpedantic -Werror)
+  target_compile_options(${target_name} PRIVATE
+  	-pedantic # Warn on language extensions
+  	-Wall -Wextra # reasonable and standard
+	-Wpedantic # (all versions of GCC, Clang >= 3.2) warn if non-standard C++ is used
+	-Wshadow # warn the user if a variable declaration shadows one from a parent context
+	-Wnon-virtual-dtor # warn the user if a class with virtual functions has a non-virtual destructor. This helps catch hard to track down memory errors
+	-Wold-style-cast # warn for c-style casts
+	-Wcast-align # warn for potential performance problem casts
+	-Wunused # warn on anything being unused
+	-Woverloaded-virtual # warn if you overload (not override) a virtual function
+	-Wconversion # warn on type conversions that may lose data
+	-Wduplicated-cond # (only in GCC >= 6.0) warn if if / else chain has duplicated conditions
+	-Wduplicated-branches # (only in GCC >= 7.0) warn if if / else branches have duplicated code
+	-Wlogical-op # (only in GCC) warn about logical operations being used where bitwise were probably wanted
+	-Wnull-dereference # (only in GCC >= 6.0) warn if a null dereference is detected
+	-Wdouble-promotion # (GCC >= 4.6, Clang >= 3.8) warn if float is implicit promoted to double
+	-Wstrict-null-sentinel
+	-Wfloat-equal
+	-Wcast-qual
+	-Wzero-as-null-pointer-constant
+	-Wsign-conversion # (Clang all versions, GCC >= 4.3) warn on sign conversions
+	)
 endif()
 
 # compile shaders
