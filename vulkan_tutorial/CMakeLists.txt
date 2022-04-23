@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.18)
 
 set(target_name vulkan_tutorial)
 
@@ -38,35 +38,47 @@ target_compile_definitions(${target_name} PUBLIC
 target_include_directories(${target_name} PUBLIC ${target_src_root})
 
 if(MSVC)
-  # Force to always compile with W4
-  if(CMAKE_CXX_FLAGS MATCHES "/W[0-4]")
-    string(REGEX REPLACE "/W[0-4]" "/W4" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-  else()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
-  endif()
+	# Force to always compile with W4
+	if(CMAKE_CXX_FLAGS MATCHES "/W[0-4]")
+		string(REGEX REPLACE "/W[0-4]" "/W4" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+	else()
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
+	endif()
 else()
-  target_compile_options(${target_name} PRIVATE
-  	-pedantic # Warn on language extensions
-  	-Wall -Wextra # reasonable and standard
-	-Wpedantic # (all versions of GCC, Clang >= 3.2) warn if non-standard C++ is used
-	-Wshadow # warn the user if a variable declaration shadows one from a parent context
-	-Wnon-virtual-dtor # warn the user if a class with virtual functions has a non-virtual destructor. This helps catch hard to track down memory errors
-	-Wold-style-cast # warn for c-style casts
-	-Wcast-align # warn for potential performance problem casts
-	-Wunused # warn on anything being unused
-	-Woverloaded-virtual # warn if you overload (not override) a virtual function
-	-Wconversion # warn on type conversions that may lose data
-	-Wduplicated-cond # (only in GCC >= 6.0) warn if if / else chain has duplicated conditions
-	-Wduplicated-branches # (only in GCC >= 7.0) warn if if / else branches have duplicated code
-	-Wlogical-op # (only in GCC) warn about logical operations being used where bitwise were probably wanted
-	-Wnull-dereference # (only in GCC >= 6.0) warn if a null dereference is detected
-	-Wdouble-promotion # (GCC >= 4.6, Clang >= 3.8) warn if float is implicit promoted to double
-	-Wstrict-null-sentinel
-	-Wfloat-equal
-	-Wcast-qual
-	-Wzero-as-null-pointer-constant
-	-Wsign-conversion # (Clang all versions, GCC >= 4.3) warn on sign conversions
+	# command warnings for clang and gcc
+	set(compile_opts
+		-pedantic # Warn on language extensions
+		-Wall -Wextra # reasonable and standard
+		-Wpedantic # (all versions of GCC, Clang >= 3.2) warn if non-standard C++ is used
+		-Wshadow # warn the user if a variable declaration shadows one from a parent context
+		-Wnon-virtual-dtor # warn the user if a class with virtual functions has a non-virtual destructor. This helps catch hard to track down memory errors
+		-Wold-style-cast # warn for c-style casts
+		-Wcast-align # warn for potential performance problem casts
+		-Wunused # warn on anything being unused
+		-Woverloaded-virtual # warn if you overload (not override) a virtual function
+		-Wconversion # warn on type conversions that may lose data
+		-Wnull-dereference # (only in GCC >= 6.0) warn if a null dereference is detected
+		-Wdouble-promotion # (GCC >= 4.6, Clang >= 3.8) warn if float is implicit promoted to double
+		-Wfloat-equal
+		-Wcast-qual
+		-Wzero-as-null-pointer-constant
+		-Wsign-conversion # (Clang all versions, GCC >= 4.3) warn on sign conversions
 	)
+
+	if (CMAKE_CXX_COMPILER_ID STREQUAL "GCC")
+		list(APPEND compile_opts
+			-Wduplicated-cond # (only in GCC >= 6.0) warn if if / else chain has duplicated conditions
+			-Wduplicated-branches # (only in GCC >= 7.0) warn if if / else branches have duplicated code
+			-Wlogical-op # (only in GCC) warn about logical operations being used where bitwise were probably wanted
+			-Wstrict-null-sentinel
+		)
+	elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+		# only special branch of Clang currently but it is really helpful
+		#list(APPEND compile_opts
+		#	-Wlifetime # shows object lifetime issues
+		#)
+	endif()
+	target_compile_options(${target_name} PRIVATE ${compile_opts})
 endif()
 
 # compile shaders
@@ -112,7 +124,7 @@ function(copy_content_fn)
 
 		add_custom_command(
 			TARGET ${copy_content_fn_TARGET}
-			COMMAND ${CMAKE_COMMAND} -E copy ${file_src_abs} ${file_dst_abs}
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different ${file_src_abs} ${file_dst_abs}
 			MAIN_DEPENDENCY ${file_src_abs})
 	endforeach()
 endfunction()

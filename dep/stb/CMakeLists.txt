@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.18)
 
 set(target_name stb)
 set(target_root ${CMAKE_CURRENT_SOURCE_DIR})
